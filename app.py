@@ -1,11 +1,27 @@
-import io
-from datetime import datetime
-
 import streamlit as st
 from PIL import Image
+from datetime import datetime
+import json
+from pathlib import Path
+
+
+# =========================================================
+# AI 蝦皮自動化 3.0 PRO
+# Streamlit Cloud 單檔完整版
+# =========================================================
 
 APP_NAME = "AI 蝦皮自動化"
-APP_VERSION = "2.5 PRO"
+APP_VERSION = "3.0 PRO"
+
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+
+HISTORY_FILE = DATA_DIR / "history.json"
+
+
+# =========================================================
+# Streamlit 基本設定
+# =========================================================
 
 st.set_page_config(
     page_title=f"{APP_NAME} {APP_VERSION}",
@@ -14,281 +30,1143 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown("""
-<style>
-.stApp{background:radial-gradient(circle at 20% 0%,rgba(255,90,0,.08),transparent 25%),#05080d;color:#f5f7fa}
-#MainMenu,footer{visibility:hidden}
-section[data-testid="stSidebar"]{background:linear-gradient(180deg,#0a1018,#070b11);border-right:1px solid rgba(255,255,255,.08)}
-.card{background:linear-gradient(145deg,#101923,#090f17);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;margin-bottom:14px}
-.title{font-size:24px;font-weight:800}.sub{color:#8995a4;font-size:12px}
-.section{font-size:17px;font-weight:800;margin:10px 0}
-.badge{display:inline-block;margin-left:8px;padding:3px 8px;border-radius:6px;font-size:11px;color:#ff9d52;border:1px solid #ff6a00;background:rgba(255,90,0,.1)}
-.metric{background:linear-gradient(145deg,#111a25,#0b1119);border:1px solid rgba(255,255,255,.07);border-radius:13px;padding:13px;min-height:80px}
-.metric-label{font-size:11px;color:#8995a4}.metric-value{font-size:21px;font-weight:800;margin-top:4px}.orange{color:#ff6a00}.green{color:#50d890}.blue{color:#4ab7ff}.purple{color:#b28cff}
-.workflow{display:flex;gap:8px;align-items:center;background:#0b121b;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px;margin-bottom:14px;overflow-x:auto}
-.step{min-width:130px;flex:1;background:#101923;border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:10px}.step-icon{font-size:22px}.step-title{font-size:13px;font-weight:800}.step-desc{font-size:10px;color:#7e8a99}.arrow{color:#ff6a00;font-size:20px;font-weight:bold}
-.check{color:#49d98c}.tag{display:inline-block;padding:5px 9px;margin:3px;background:#172331;border:1px solid #293a4b;border-radius:7px;color:#b8c5d2;font-size:11px}
-.stButton>button{border-radius:8px!important;background:#111a24!important;color:#fff!important;font-weight:700!important;border:1px solid rgba(255,255,255,.12)!important}
-.stButton>button:hover{border-color:#ff6a00!important;color:#ff8b42!important}
-.stTextInput input,.stNumberInput input,.stTextArea textarea,.stSelectbox div[data-baseweb="select"]>div{background:#0b121b!important;color:#fff!important;border-radius:8px!important}
-</style>
-""", unsafe_allow_html=True)
 
-# -------------------- state --------------------
+# =========================================================
+# CSS
+# =========================================================
+
+st.markdown(
+    """
+<style>
+
+.stApp {
+    background:
+        radial-gradient(
+            circle at 20% 0%,
+            rgba(255,90,0,.10),
+            transparent 28%
+        ),
+        #05080d;
+    color: #f5f7fa;
+}
+
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+section[data-testid="stSidebar"] {
+    background: linear-gradient(
+        180deg,
+        #0a1018,
+        #070b11
+    );
+    border-right: 1px solid rgba(255,255,255,.08);
+}
+
+.card {
+    background: linear-gradient(
+        145deg,
+        #101923,
+        #090f17
+    );
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 14px;
+}
+
+.title {
+    font-size: 26px;
+    font-weight: 800;
+}
+
+.sub {
+    color: #8995a4;
+    font-size: 12px;
+}
+
+.section {
+    font-size: 18px;
+    font-weight: 800;
+    margin: 15px 0 10px 0;
+}
+
+.badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #ff9d52;
+    border: 1px solid #ff6a00;
+    background: rgba(255,90,0,.1);
+}
+
+.metric {
+    background: linear-gradient(
+        145deg,
+        #111a25,
+        #0b1119
+    );
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 13px;
+    padding: 14px;
+    min-height: 85px;
+}
+
+.metric-label {
+    font-size: 11px;
+    color: #8995a4;
+}
+
+.metric-value {
+    font-size: 21px;
+    font-weight: 800;
+    margin-top: 4px;
+}
+
+.orange {
+    color: #ff6a00;
+}
+
+.green {
+    color: #50d890;
+}
+
+.blue {
+    color: #4ab7ff;
+}
+
+.purple {
+    color: #b28cff;
+}
+
+.workflow {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: #0b121b;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 14px;
+    overflow-x: auto;
+}
+
+.step {
+    min-width: 130px;
+    flex: 1;
+    background: #101923;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 11px;
+    padding: 10px;
+}
+
+.step-icon {
+    font-size: 22px;
+}
+
+.step-title {
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.step-desc {
+    font-size: 10px;
+    color: #7e8a99;
+}
+
+.arrow {
+    color: #ff6a00;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.check {
+    color: #49d98c;
+}
+
+.tag {
+    display: inline-block;
+    padding: 5px 9px;
+    margin: 3px;
+    background: #172331;
+    border: 1px solid #293a4b;
+    border-radius: 7px;
+    color: #b8c5d2;
+    font-size: 11px;
+}
+
+.stButton > button {
+    border-radius: 8px !important;
+    background: #111a24 !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+}
+
+.stButton > button:hover {
+    border-color: #ff6a00 !important;
+    color: #ff8b42 !important;
+}
+
+.stTextInput input,
+.stNumberInput input,
+.stTextArea textarea,
+.stSelectbox div[data-baseweb="select"] > div {
+    background: #0b121b !important;
+    color: #fff !important;
+    border-radius: 8px !important;
+}
+
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+
+# =========================================================
+# AI 蝦皮核心指令碼
+# =========================================================
+
+AI_SHOPEE_SYSTEM_PROMPT = """
+你是「AI 蝦皮自動化」的核心 AI 商品營運智能體。
+
+你的任務是協助電商賣家完成：
+
+1. 商品資料分析
+2. 商品圖片分析
+3. 商品定位
+4. 蝦皮商品標題
+5. 蝦皮商品描述
+6. 商品賣點
+7. SEO 關鍵字
+8. TikTok 短影音文案
+9. TikTok 9:16 短影音腳本
+10. 即夢 AI 商品影片 Prompt
+11. 商品上架資料整理
+
+【最高優先規則】
+
+如果有商品圖片：
+
+- 商品圖片是商品視覺資訊的唯一來源。
+- 不可以自行修改品牌。
+- 不可以自行修改包裝。
+- 不可以自行修改產品外型。
+- 不可以自行修改產品顏色。
+- 不可以自行修改 Logo。
+- 不可以自行創造不存在的文字。
+- 不可以自行創造不存在的規格。
+- 不可以自行創造不存在的功效。
+- 不可以自行創造不存在的認證。
+- 看不到的內容必須明確說明無法確認。
+
+【商品文案規則】
+
+商品標題：
+- 清楚
+- 自然
+- 適合蝦皮搜尋
+- 不使用過度誇張詞語
+- 不虛構產品資訊
+
+商品描述：
+- 商品名稱
+- 商品特色
+- 使用情境
+- 商品規格
+- 注意事項
+
+如果資料不足：
+不要猜測。
+
+【TikTok 規則】
+
+影片比例：
+9:16
+
+內容流程：
+
+前 3 秒：
+吸引注意力
+
+中段：
+展示商品
+
+後段：
+商品特色
+
+結尾：
+行動呼籲
+
+【即夢 AI Prompt 規則】
+
+- 9:16 vertical video
+- premium commercial product photography
+- cinematic lighting
+- slow camera movement
+- subtle push-in
+- subtle orbit
+- realistic product
+- preserve original packaging
+- preserve original logo
+- preserve original label
+- preserve original colors
+- preserve visible text
+
+禁止：
+
+- redesign product
+- fake logo
+- fake text
+- fake packaging
+- changing product shape
+- changing product color
+- adding unrelated products
+- changing brand identity
+
+【輸出內容】
+
+請依照以下結構：
+
+商品分析
+商品定位
+蝦皮標題
+商品描述
+商品賣點
+SEO 關鍵字
+TikTok 文案
+TikTok 腳本
+即夢 AI Prompt
+"""
+    
+
+# =========================================================
+# Session State
+# =========================================================
+
 def init_state():
+
     defaults = {
         "page": "商品上架工作台",
+
         "product_name": "",
         "category": "保養保健",
         "price": 499,
         "stock": 100,
-        "selling_points": "",
         "condition": "全新",
+        "selling_points": "",
+
         "images": [],
+
         "generated": False,
+
         "published": 0,
+
         "history": [],
+
+        "ai_result": "",
+
+        "selected_title": "",
+
+        "api_key": "",
     }
+
     for key, value in defaults.items():
+
         if key not in st.session_state:
+
             st.session_state[key] = value
+
 
 init_state()
 
-# -------------------- helpers --------------------
-def current_name():
-    return st.session_state.product_name.strip() or "玻尿酸保濕精華液"
 
-def title_text():
-    return f"{current_name()}｜深層保濕修護｜日常補水保養"
-
-def description_text():
-    return f"""{current_name()}\n\n✨ 商品特色\n✓ 深層保濕補水\n✓ 修護日常保養\n✓ 溫和好使用\n✓ 清爽不黏膩\n\n實際商品資訊請以商品包裝及賣場資訊為準。"""
-
-def keywords_text():
-    return "保濕,補水,修護,保養,美容,肌膚,日常保養"
-
-def tiktok_text():
-    return f"""🔥 {current_name()}\n\n乾燥、缺水怎麼辦？\n用簡單的日常保養方式，維持水嫩感。\n\n✨ 商品特色展示\n🛒 想了解更多商品資訊，立即查看賣場！"""
-
-def jimeng_prompt():
-    return f"""9:16 vertical premium commercial product video.\n\nMain subject: {current_name()}\n\nUse the uploaded product image as the ONLY visual source for the product. Preserve original product shape, packaging, logo, label, colors, materials and visible text.\n\nCamera: slow cinematic push-in, subtle orbit movement, premium commercial lighting, clean luxury background.\n\nDo not redesign the product. Do not invent logos. Do not change packaging. Do not add fake text."""
+# =========================================================
+# 歷史紀錄
+# =========================================================
 
 def save_history(action):
-    st.session_state.history.insert(0, {
-        "時間": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "商品": current_name(),
+
+    record = {
+        "時間": datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
+        "商品": current_product_name(),
         "操作": action,
-    })
+    }
 
-# -------------------- sidebar --------------------
+    st.session_state.history.insert(0, record)
+
+
+def current_product_name():
+
+    name = st.session_state.product_name.strip()
+
+    if name:
+
+        return name
+
+    return "尚未輸入商品名稱"
+
+
+# =========================================================
+# 商品分析
+# =========================================================
+
+def analyze_product():
+
+    name = current_product_name()
+
+    category = st.session_state.category
+
+    price = st.session_state.price
+
+    stock = st.session_state.stock
+
+    condition = st.session_state.condition
+
+    points = st.session_state.selling_points.strip()
+
+    if not points:
+
+        points = "目前沒有提供額外商品賣點"
+
+    result = f"""
+【商品分析】
+
+商品名稱：
+{name}
+
+商品分類：
+{category}
+
+價格：
+NT${price}
+
+庫存：
+{stock}
+
+商品狀態：
+{condition}
+
+商品賣點：
+{points}
+
+【AI 商品定位】
+
+此商品目前可依照：
+「{category}」
+進行蝦皮商品內容整理。
+
+【注意】
+
+目前這個版本沒有直接連接 Gemini，
+因此不會假裝自己已經完成真正的 AI 圖片分析。
+
+如果未來接入 Gemini，
+可以將上方的 AI_SHOPEE_SYSTEM_PROMPT
+直接作為核心系統指令。
+
+圖片數量：
+{len(st.session_state.images)} 張
+"""
+
+    return result
+
+
+# =========================================================
+# 標題
+# =========================================================
+
+def title_text():
+
+    name = current_product_name()
+
+    if name == "尚未輸入商品名稱":
+
+        name = "商品名稱"
+
+    return (
+        f"{name}｜高品質日常使用｜熱門推薦"
+    )
+
+
+def title_variants():
+
+    name = current_product_name()
+
+    if name == "尚未輸入商品名稱":
+
+        name = "商品名稱"
+
+    return [
+        f"{name}｜高品質日常使用",
+        f"{name}｜熱門推薦｜日常好用",
+        f"{name}｜實用商品｜限時優惠",
+        f"{name}｜人氣商品｜蝦皮推薦",
+    ]
+
+
+# =========================================================
+# 商品描述
+# =========================================================
+
+def description_text():
+
+    name = current_product_name()
+
+    points = st.session_state.selling_points.strip()
+
+    if not points:
+
+        points = "商品特色請依實際商品資訊確認"
+
+    return f"""
+{name}
+
+✨ 商品特色
+
+✓ {points}
+
+📦 商品資訊
+
+商品分類：
+{st.session_state.category}
+
+商品狀態：
+{st.session_state.condition}
+
+庫存：
+{st.session_state.stock}
+
+💰 商品價格
+
+NT${st.session_state.price}
+
+⚠️ 注意事項
+
+實際商品資訊請以商品實物、
+商品包裝與賣場資訊為準。
+
+如有任何規格疑問，
+請購買前先確認商品資訊。
+"""
+
+
+# =========================================================
+# SEO
+# =========================================================
+
+def keywords_text():
+
+    name = current_product_name()
+
+    category = st.session_state.category
+
+    return (
+        f"{name},"
+        f"{category},"
+        "蝦皮,"
+        "網路購物,"
+        "熱門商品,"
+        "日常用品,"
+        "推薦商品"
+    )
+
+
+# =========================================================
+# TikTok
+# =========================================================
+
+def tiktok_text():
+
+    name = current_product_name()
+
+    return f"""
+🔥 {name}
+
+還在找適合自己的商品嗎？
+
+這次直接帶你快速看看：
+
+✨ 商品特色展示
+✨ 商品外觀展示
+✨ 實際使用情境
+✨ 商品細節
+
+如果你正在找：
+
+「{name}」
+
+可以進一步查看商品資訊。
+
+🛒 想了解更多，
+直接查看賣場！
+"""
+
+
+# =========================================================
+# TikTok 腳本
+# =========================================================
+
+def tiktok_script():
+
+    name = current_product_name()
+
+    return f"""
+【0-3 秒｜Hook】
+
+畫面：
+快速展示 {name}
+
+字幕：
+「最近很多人都在找這個！」
+
+旁白：
+「如果你正在找 {name}，先看這裡。」
+
+--------------------------------
+
+【3-8 秒｜商品展示】
+
+畫面：
+商品近距離展示。
+
+鏡頭慢慢推近。
+
+字幕：
+「商品細節一次看」
+
+--------------------------------
+
+【8-15 秒｜特色】
+
+畫面：
+依照商品實際特色展示。
+
+字幕：
+「實際商品資訊請以商品為準」
+
+--------------------------------
+
+【15-20 秒｜結尾】
+
+畫面：
+商品正面展示。
+
+字幕：
+「想了解更多，查看賣場」
+
+旁白：
+「想知道更多商品資訊，
+直接到賣場看看。」
+"""
+
+
+# =========================================================
+# 即夢 Prompt
+# =========================================================
+
+def jimeng_prompt():
+
+    name = current_product_name()
+
+    return f"""
+9:16 vertical premium commercial product video.
+
+MAIN SUBJECT:
+{name}
+
+SOURCE RULE:
+Use the uploaded product image as the ONLY visual source
+for the actual product.
+
+PRODUCT CONSISTENCY:
+
+Preserve the original:
+
+- product shape
+- packaging
+- brand
+- logo
+- label
+- visible text
+- colors
+- materials
+- proportions
+- physical appearance
+
+CAMERA:
+
+Slow cinematic push-in.
+
+Subtle orbit movement.
+
+Smooth professional camera motion.
+
+PREMIUM STYLE:
+
+Luxury commercial photography.
+
+Clean studio environment.
+
+Soft cinematic lighting.
+
+Realistic shadows.
+
+Natural reflections.
+
+High detail.
+
+Photorealistic product presentation.
+
+BACKGROUND:
+
+Clean premium background.
+
+The background must not change
+the actual product identity.
+
+IMPORTANT:
+
+Do not redesign the product.
+
+Do not create a new package.
+
+Do not invent a logo.
+
+Do not invent text.
+
+Do not change the brand.
+
+Do not change the product color.
+
+Do not change the product shape.
+
+Do not add fake product information.
+
+Do not create unrelated products.
+
+The uploaded image remains
+the authoritative source for the product.
+"""
+
+
+# =========================================================
+# Sidebar
+# =========================================================
+
 def sidebar():
-    with st.sidebar:
-        st.markdown('<div class="card"><div style="font-size:19px;font-weight:800">🛍️ AI 蝦皮自動化</div><div class="sub">AI 智能生成・一鍵上架</div></div>', unsafe_allow_html=True)
-        menus = [
-            ("🏠", "Dashboard"), ("🛍️", "商品上架工作台"), ("📦", "商品管理"),
-            ("🧾", "訂單管理"), ("📊", "數據分析"), ("🖼️", "AI 素材庫"),
-            ("🕘", "歷史紀錄"), ("🎵", "TikTok 短影音"), ("💰", "蝦皮分潤管理"),
-        ]
-        for icon, name in menus:
-            if st.button(f"{icon}  {name}", key=f"nav_{name}", use_container_width=True):
-                st.session_state.page = name
-                st.rerun()
-        st.markdown("---")
-        for icon, name in [("👤", "會員管理"), ("🛡️", "管理員中心"), ("⚙️", "系統設定"), ("🔑", "API 設定"), ("📚", "使用教學")]:
-            if st.button(f"{icon}  {name}", key=f"sys_{name}", use_container_width=True):
-                st.session_state.page = name
-                st.rerun()
-        st.markdown('<div class="card"><b style="color:#ff8a3d">👑 PRO 會員</b><br><span class="check">✓</span> AI 內容生成<br><span class="check">✓</span> 商品圖片分析介面<br><span class="check">✓</span> TikTok 9:16<br><span class="check">✓</span> 即夢 Prompt<br><span class="check">✓</span> 歷史紀錄</div>', unsafe_allow_html=True)
 
-# -------------------- header / metrics --------------------
+    with st.sidebar:
+
+        st.markdown(
+            """
+            <div class="card">
+                <div style="font-size:20px;font-weight:800">
+                    🛍️ AI 蝦皮自動化
+                </div>
+                <div class="sub">
+                    AI 商品營運智能中心
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        menus = [
+            ("🏠", "Dashboard"),
+            ("🛍️", "商品上架工作台"),
+            ("📦", "商品管理"),
+            ("🧾", "訂單管理"),
+            ("📊", "數據分析"),
+            ("🖼️", "AI 素材庫"),
+            ("🕘", "歷史紀錄"),
+            ("🎵", "TikTok 短影音"),
+            ("💰", "蝦皮分潤管理"),
+        ]
+
+        for icon, name in menus:
+
+            if st.button(
+                f"{icon}  {name}",
+                key=f"nav_{name}",
+                use_container_width=True,
+            ):
+
+                st.session_state.page = name
+
+                st.rerun()
+
+        st.markdown("---")
+
+        system_menus = [
+            ("👤", "會員管理"),
+            ("🛡️", "管理員中心"),
+            ("⚙️", "系統設定"),
+            ("🔑", "API 設定"),
+            ("📚", "使用教學"),
+        ]
+
+        for icon, name in system_menus:
+
+            if st.button(
+                f"{icon}  {name}",
+                key=f"sys_{name}",
+                use_container_width=True,
+            ):
+
+                st.session_state.page = name
+
+                st.rerun()
+
+        st.markdown(
+            """
+            <div class="card">
+                <b style="color:#ff8a3d">
+                    👑 PRO
+                </b>
+                <br><br>
+
+                <span class="check">✓</span>
+                商品分析
+                <br>
+
+                <span class="check">✓</span>
+                商品圖片
+                <br>
+
+                <span class="check">✓</span>
+                蝦皮文案
+                <br>
+
+                <span class="check">✓</span>
+                TikTok 9:16
+                <br>
+
+                <span class="check">✓</span>
+                即夢 Prompt
+                <br>
+
+                <span class="check">✓</span>
+                歷史紀錄
+                <br>
+
+                <span class="check">✓</span>
+                AI 指令碼
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+# =========================================================
+# Header
+# =========================================================
+
 def header():
-    st.markdown('<div class="card"><div class="title">🛍️ AI 蝦皮自動化 <span class="badge">2.5 PRO</span></div><div class="sub">AI 智能生成・商品工作流・蝦皮上架準備</div></div>', unsafe_allow_html=True)
+
+    st.markdown(
+        f"""
+        <div class="card">
+
+            <div class="title">
+                🛍️ {APP_NAME}
+
+                <span class="badge">
+                    {APP_VERSION}
+                </span>
+            </div>
+
+            <div class="sub">
+                AI 商品分析・蝦皮文案・TikTok・即夢 Prompt
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =========================================================
+# Metrics
+# =========================================================
 
 def metrics():
-    cols = st.columns(4)
-    values = [("今日 AI 使用額度", "86 / 200 次", "orange"), ("AI 剩餘額度", "1,248 Tokens", "green"), ("會員等級", "PRO 會員", "purple"), ("會員期限", "永久會員", "blue")]
-    for col, (label, value, cls) in zip(cols, values):
-        with col:
-            st.markdown(f'<div class="metric"><div class="metric-label">{label}</div><div class="metric-value {cls}">{value}</div></div>', unsafe_allow_html=True)
 
-# -------------------- dashboard --------------------
+    cols = st.columns(4)
+
+    values = [
+        (
+            "AI 工作流",
+            "READY",
+            "orange",
+        ),
+        (
+            "圖片",
+            f"{len(st.session_state.images)} 張",
+            "green",
+        ),
+        (
+            "模擬上架",
+            f"{st.session_state.published} 次",
+            "purple",
+        ),
+        (
+            "系統",
+            "正常",
+            "blue",
+        ),
+    ]
+
+    for col, (label, value, cls) in zip(
+        cols,
+        values,
+    ):
+
+        with col:
+
+            st.markdown(
+                f"""
+                <div class="metric">
+
+                    <div class="metric-label">
+                        {label}
+                    </div>
+
+                    <div class="metric-value {cls}">
+                        {value}
+                    </div>
+
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+# =========================================================
+# Dashboard
+# =========================================================
+
 def dashboard():
-    st.markdown('<div class="section">📊 Dashboard 總覽</div>', unsafe_allow_html=True)
-    cols = st.columns(4)
-    for col, icon, label, value, delta in zip(cols, ["🛍️", "👁️", "🛒", "💰"], ["今日上架商品", "商品瀏覽數", "成交訂單", "銷售額"], ["12", "5,689", "58", "NT$28,560"], ["+3", "+22%", "+15%", "+25%"]):
-        with col:
-            st.markdown(f'<div class="metric"><div style="font-size:23px">{icon}</div><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="green">{delta}</div></div>', unsafe_allow_html=True)
-    st.markdown('<div class="section">🚀 AI 自動化流程</div>', unsafe_allow_html=True)
-    st.markdown('<div class="workflow">' + '<div class="step"><div class="step-icon">📝</div><div class="step-title">商品輸入</div><div class="step-desc">資料與圖片</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🧠</div><div class="step-title">AI 分析</div><div class="step-desc">分析商品</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">✨</div><div class="step-title">內容生成</div><div class="step-desc">標題與文案</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">⚙️</div><div class="step-title">上架設定</div><div class="step-desc">價格與庫存</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🚀</div><div class="step-title">一鍵上架</div><div class="step-desc">目前為模擬</div></div></div>', unsafe_allow_html=True)
-    a, b = st.columns([2, 1])
-    with a:
-        st.markdown('<div class="card"><b>📈 最近銷售</b></div>', unsafe_allow_html=True)
-        st.line_chart({"銷售額": [18000, 21000, 19500, 26000, 24500, 28000, 28560]})
-    with b:
-        st.markdown('<div class="card"><b>🤖 AI 使用統計</b><h1 style="color:#ff6a00">24.96%</h1>本月使用量<br><br>文案生成：658 次<br>圖片分析：412 次<br>其他功能：178 次</div>', unsafe_allow_html=True)
 
-# -------------------- workspace --------------------
+    st.markdown(
+        '<div class="section">📊 Dashboard</div>',
+        unsafe_allow_html=True,
+    )
+
+    cols = st.columns(4)
+
+    data = [
+        ("🛍️", "今日上架", "12", "+3"),
+        ("👁️", "瀏覽數", "5,689", "+22%"),
+        ("🛒", "成交訂單", "58", "+15%"),
+        ("💰", "銷售額", "NT$28,560", "+25%"),
+    ]
+
+    for col, item in zip(cols, data):
+
+        icon, label, value, delta = item
+
+        with col:
+
+            st.markdown(
+                f"""
+                <div class="metric">
+
+                    <div style="font-size:23px">
+                        {icon}
+                    </div>
+
+                    <div class="metric-label">
+                        {label}
+                    </div>
+
+                    <div class="metric-value">
+                        {value}
+                    </div>
+
+                    <div class="green">
+                        {delta}
+                    </div>
+
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(
+        '<div class="section">🚀 AI 工作流程</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div class="workflow">
+
+            <div class="step">
+                <div class="step-icon">📝</div>
+                <div class="step-title">
+                    商品輸入
+                </div>
+                <div class="step-desc">
+                    商品資料與圖片
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="step-icon">🧠</div>
+                <div class="step-title">
+                    AI 分析
+                </div>
+                <div class="step-desc">
+                    商品分析
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="step-icon">✨</div>
+                <div class="step-title">
+                    內容生成
+                </div>
+                <div class="step-desc">
+                    文案與 Prompt
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="step-icon">🛒</div>
+                <div class="step-title">
+                    蝦皮
+                </div>
+                <div class="step-desc">
+                    上架資料
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="step-icon">🎵</div>
+                <div class="step-title">
+                    TikTok
+                </div>
+                <div class="step-desc">
+                    9:16 短影音
+                </div>
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.line_chart(
+        {
+            "銷售額": [
+                18000,
+                21000,
+                19500,
+                26000,
+                24500,
+                28000,
+                28560,
+            ]
+        }
+    )
+
+
+# =========================================================
+# Workflow Header
+# =========================================================
+
 def workflow_header():
-    st.markdown('<div class="workflow"><div class="step"><div class="step-icon">📝</div><div class="step-title">商品資訊</div><div class="step-desc">輸入商品</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🧠</div><div class="step-title">AI 分析</div><div class="step-desc">分析圖片與資料</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">✨</div><div class="step-title">內容生成</div><div class="step-desc">文案與 Prompt</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🚀</div><div class="step-title">上架</div><div class="step-desc">目前為模擬</div></div></div>', unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <div class="workflow">
+
+            <div class="step">
+                <div class="step-icon">📝</div>
+                <div class="step-title">
+                    商品資訊
+                </div>
+                <div class="step-desc">
+                    商品資料
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="step-icon">🧠</div>
+                <div class="step-title">
+                    AI 分析
+                </div>
+                <div class="step-desc">
+                    商品與圖片
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="step-icon">✨</div>
+                <div class="step-title">
+                    AI 生成
+                </div>
+                <div class="step-desc">
+                    文案與 Prompt
+                </div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="step-icon">🚀</div>
+                <div class="step-title">
+                    上架
+                </div>
+                <div class="step-desc">
+                    模擬上架
+                </div>
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =========================================================
+# 商品工作台
+# =========================================================
 
 def workspace():
+
     workflow_header()
-    left, middle, right = st.columns([1.05, 1.25, 1.2])
+
+    left, middle, right = st.columns(
+        [1.05, 1.2, 1.25]
+    )
+
+    # -----------------------------------------------------
+    # 左邊
+    # -----------------------------------------------------
+
     with left:
-        st.markdown('<div class="card"><b>① 商品資訊輸入</b>', unsafe_allow_html=True)
-        name = st.text_input("商品名稱", value=st.session_state.product_name, placeholder="例如：玻尿酸保濕精華液 30ml")
-        category = st.selectbox("商品分類", ["保養保健", "美妝保養", "3C 電子", "居家生活", "服飾鞋包", "食品飲料", "汽機車", "其他"], index=0)
-        price = st.number_input("商品價格", min_value=0, value=int(st.session_state.price), step=10)
-        stock = st.number_input("商品庫存", min_value=0, value=int(st.session_state.stock), step=1)
-        condition = st.radio("商品狀態", ["全新", "二手"], horizontal=True)
-        points = st.text_area("商品賣點", value=st.session_state.selling_points, placeholder="例如：深層保濕、修護、溫和", height=90)
-        files = st.file_uploader("上傳商品圖片（可多張）", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True)
-        if files:
-            st.session_state.images = files
-            st.success(f"已選擇 {len(files)} 張圖片")
-        if st.button("🚀 執行 AI 工作流", use_container_width=True):
-            st.session_state.product_name = name
-            st.session_state.category = category
-            st.session_state.price = price
-            st.session_state.stock = stock
-            st.session_state.condition = condition
-            st.session_state.selling_points = points
-            st.session_state.generated = True
-            save_history("執行 AI 工作流")
-            st.success("工作流完成，內容已產生")
-        st.markdown('</div>', unsafe_allow_html=True)
-    with middle:
-        st.markdown('<div class="card"><b>② AI 分析結果</b>', unsafe_allow_html=True)
-        tabs = st.tabs(["商品分析", "標題建議", "關鍵字", "賣點"])
-        with tabs[0]:
-            if st.session_state.images:
-                try:
-                    img = Image.open(st.session_state.images[0])
-                    st.image(img, use_container_width=True)
-                except Exception:
-                    st.warning("圖片無法讀取")
-            else:
-                st.info("尚未上傳商品圖片")
-            st.write(f"商品：{current_name()}")
-            st.write("目前為離線展示模式；未連接 Gemini，因此不會虛構真正的圖片分析結果。")
-        with tabs[1]:
-            for i, text in enumerate([title_text(), f"{current_name()}｜保濕補水｜日常保養", f"高效修護 {current_name()}｜清爽好吸收"]):
-                st.checkbox(text, value=(i == 0), key=f"suggest_{i}")
-        with tabs[2]:
-            st.markdown("".join(f'<span class="tag">#{x}</span>' for x in keywords_text().split(",")), unsafe_allow_html=True)
-        with tabs[3]:
-            for x in ["深層保濕補水", "日常修護", "溫和好使用", "清爽不黏膩"]:
-                st.markdown(f'<div><span class="check">✓</span> {x}</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with right:
-        st.markdown('<div class="card"><b>③ AI 內容生成</b>', unsafe_allow_html=True)
-        tabs = st.tabs(["商品標題", "商品描述", "關鍵字", "TikTok 文案", "即夢 Prompt"])
-        with tabs[0]:
-            st.text_area("標題", title_text(), height=120)
-        with tabs[1]:
-            st.text_area("描述", description_text(), height=200)
-        with tabs[2]:
-            st.text_area("關鍵字", keywords_text(), height=90)
-        with tabs[3]:
-            st.text_area("TikTok", tiktok_text(), height=170)
-        with tabs[4]:
-            st.text_area("即夢 AI 2.5 Prompt", jimeng_prompt(), height=260)
-        st.markdown('</div>', unsafe_allow_html=True)
-    bottom1, bottom2, bottom3 = st.columns([1, 1.2, 1])
-    with bottom1:
-        st.markdown('<div class="card"><b>④ 蝦皮上架設定</b>', unsafe_allow_html=True)
-        st.selectbox("物流", ["蝦皮店到店", "7-11 店到店", "全家店到店", "賣家宅配"])
-        st.selectbox("出貨地", ["台灣・新北市", "台灣・台北市", "台灣・桃園市"])
-        st.text_input("商品規格", "30ml")
-        st.number_input("上架庫存", min_value=0, value=int(st.session_state.stock))
-        st.selectbox("出貨天數", ["1 天內出貨", "2 天內出貨", "3 天內出貨", "7 天內出貨"])
-        st.toggle("自動回覆買家問題", True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with bottom2:
-        st.markdown('<div class="card"><b>⑤ 蝦皮上架預覽</b>', unsafe_allow_html=True)
-        if st.session_state.images:
-            try:
-                st.image(Image.open(st.session_state.images[0]), use_container_width=True)
-            except Exception:
-                st.info("圖片預覽失敗")
-        else:
-            st.info("尚未上傳商品圖片")
-        st.markdown(f'<div style="background:#fff;color:#222;padding:12px;border-radius:9px"><b>{current_name()}</b><div style="color:#ee4d2d;font-size:25px;font-weight:800">NT${st.session_state.price}</div><small>⭐⭐⭐⭐⭐　預覽資料</small></div>', unsafe_allow_html=True)
-        if st.button("🚀 一鍵上架蝦皮（模擬）", use_container_width=True):
-            st.session_state.published += 1
-            save_history("一鍵上架模擬")
-            st.success("模擬上架完成；尚未連接蝦皮官方 API，不會真的發布商品。")
-        st.markdown('</div>', unsafe_allow_html=True)
-    with bottom3:
-        st.markdown(f'<div class="card"><b>系統狀態</b><h2>🟢 正常</h2>AI：離線展示模式<br>圖片：{len(st.session_state.images)} 張<br>模擬上架：{st.session_state.published} 次<br>版本：{APP_VERSION}</div>', unsafe_allow_html=True)
 
-# -------------------- generic pages --------------------
-def generic_page(page):
-    info = {
-        "商品管理": ("📦", "管理商品資料與上架狀態"),
-        "訂單管理": ("🧾", "管理訂單與出貨流程"),
-        "數據分析": ("📊", "查看銷售與使用數據"),
-        "AI 素材庫": ("🖼️", "管理圖片、影片與 Prompt"),
-        "歷史紀錄": ("🕘", "查看操作歷史"),
-        "TikTok 短影音": ("🎵", "建立 9:16 短影音內容"),
-        "蝦皮分潤管理": ("💰", "查看分潤資料"),
-        "會員管理": ("👤", "管理會員帳號與期限"),
-        "管理員中心": ("🛡️", "管理系統權限"),
-        "系統設定": ("⚙️", "系統功能設定"),
-        "API 設定": ("🔑", "AI 與蝦皮 API 設定"),
-        "使用教學": ("📚", "操作說明"),
-    }
-    icon, desc = info.get(page, ("⚙️", "系統功能"))
-    st.markdown(f'<div class="card"><div style="font-size:28px">{icon}</div><div class="title">{page}</div><div class="sub">{desc}</div></div>', unsafe_allow_html=True)
-    if page == "商品管理":
-        st.dataframe({"商品":["玻尿酸保濕精華液","修護面膜","保濕乳液"],"價格":[499,299,399],"庫存":[100,250,88],"狀態":["上架中","上架中","草稿"]}, use_container_width=True, hide_index=True)
-    elif page == "訂單管理":
-        st.info("目前為介面展示版，尚未連接蝦皮訂單 API。")
-    elif page == "數據分析":
-        a,b,c=st.columns(3)
-        a.metric("今日銷售額","NT$28,560","+25%")
-        b.metric("今日訂單","58","+15%")
-        c.metric("瀏覽人次","5,689","+22%")
-        st.line_chart({"銷售額":[18000,21000,19500,26000,24500,28000,28560]})
-    elif page == "AI 素材庫":
-        st.info("素材庫介面已建立；目前資料只保存在本次 Streamlit 工作階段。")
-    elif page == "歷史紀錄":
-        if st.session_state.history:
-            st.dataframe(st.session_state.history, use_container_width=True, hide_index=True)
-        else:
-            st.info("尚無歷史紀錄。")
-    elif page == "TikTok 短影音":
-        st.text_area("9:16 短影音腳本", tiktok_text(), height=180)
-        st.text_area("即夢 AI 2.5 Prompt", jimeng_prompt(), height=230)
-        st.info("目前只生成文字 Prompt，尚未連接影片生成服務。")
-    elif page == "蝦皮分潤管理":
-        st.metric("本月分潤","NT$12,580","+18%")
-    elif page == "會員管理":
-        st.info("會員管理介面已建立。正式登入與永久會員資料庫可在下一階段接入。")
-    elif page == "管理員中心":
-        st.warning("目前為展示介面，正式管理員驗證尚未連接資料庫。")
-    elif page == "系統設定":
-        st.toggle("啟用 AI 自動分析", True)
-        st.toggle("自動保存歷史紀錄", True)
-        st.toggle("深色科技介面", True)
-    elif page == "API 設定":
-        st.info("不填 API Key 也可以正常啟動本版本。")
-        st.text_input("Gemini API Key", type="password")
-        st.text_input("Shopee API Key", type="password")
-    elif page == "使用教學":
-        st.markdown("""### 使用流程\n1. 輸入商品名稱、分類、價格、庫存。\n2. 上傳一張或多張商品圖片。\n3. 執行 AI 工作流。\n4. 檢查標題、描述、關鍵字、TikTok 文案與即夢 Prompt。\n5. 使用蝦皮預覽確認資料。\n6. 目前一鍵上架為**模擬功能**，尚未真的連接蝦皮。""")
-
-# -------------------- run --------------------
-sidebar()
-header()
-
-if st.session_state.page == "Dashboard":
-    dashboard()
-elif st.session_state.page == "商品上架工作台":
-    metrics()
-    workspace()
-else:
-    generic_page(st.session_state.page)
-
-st.markdown('<div style="text-align:center;color:#52606e;font-size:10px;padding:25px 0 10px">AI 蝦皮自動化 2.5 PRO ・ Streamlit Cloud Ready</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="card"
