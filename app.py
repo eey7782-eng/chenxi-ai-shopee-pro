@@ -1,27 +1,43 @@
+# ============================================================
+# AI 蝦皮自動化 2.5 PRO
+# 單檔 Streamlit Cloud 版本
+#
+# 功能：
+# 1. 商品資料輸入
+# 2. 商品圖片上傳與預覽
+# 3. AI 商品分析
+# 4. 蝦皮標題生成
+# 5. 商品描述生成
+# 6. 關鍵字生成
+# 7. TikTok 9:16 文案
+# 8. 即夢 AI 2.5 Prompt
+# 9. AI 蝦皮核心指令碼
+# 10. 商品管理
+# 11. 歷史紀錄
+# 12. AI 素材庫
+# 13. API 設定
+# 14. Dashboard
+#
+# 注意：
+# - 未設定 Gemini API Key 時，可以使用內建離線 AI 模擬模式
+# - 本版本不會假裝真的發布到蝦皮
+# - 「一鍵上架」目前為模擬上架
+# ============================================================
+
+import io
+import json
+from datetime import datetime
+
 import streamlit as st
 from PIL import Image
-from datetime import datetime
-import json
-from pathlib import Path
 
 
-# =========================================================
-# AI 蝦皮自動化 3.0 PRO
-# Streamlit Cloud 單檔完整版
-# =========================================================
+# ============================================================
+# 基本設定
+# ============================================================
 
 APP_NAME = "AI 蝦皮自動化"
-APP_VERSION = "3.0 PRO"
-
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
-
-HISTORY_FILE = DATA_DIR / "history.json"
-
-
-# =========================================================
-# Streamlit 基本設定
-# =========================================================
+APP_VERSION = "2.5 PRO"
 
 st.set_page_config(
     page_title=f"{APP_NAME} {APP_VERSION}",
@@ -31,9 +47,9 @@ st.set_page_config(
 )
 
 
-# =========================================================
+# ============================================================
 # CSS
-# =========================================================
+# ============================================================
 
 st.markdown(
     """
@@ -43,17 +59,14 @@ st.markdown(
     background:
         radial-gradient(
             circle at 20% 0%,
-            rgba(255,90,0,.10),
-            transparent 28%
+            rgba(255, 90, 0, 0.08),
+            transparent 25%
         ),
         #05080d;
     color: #f5f7fa;
 }
 
-#MainMenu {
-    visibility: hidden;
-}
-
+#MainMenu,
 footer {
     visibility: hidden;
 }
@@ -75,12 +88,12 @@ section[data-testid="stSidebar"] {
     );
     border: 1px solid rgba(255,255,255,.08);
     border-radius: 14px;
-    padding: 18px;
+    padding: 16px;
     margin-bottom: 14px;
 }
 
 .title {
-    font-size: 26px;
+    font-size: 24px;
     font-weight: 800;
 }
 
@@ -90,15 +103,15 @@ section[data-testid="stSidebar"] {
 }
 
 .section {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 800;
-    margin: 15px 0 10px 0;
+    margin: 10px 0;
 }
 
 .badge {
     display: inline-block;
     margin-left: 8px;
-    padding: 4px 9px;
+    padding: 3px 8px;
     border-radius: 6px;
     font-size: 11px;
     color: #ff9d52;
@@ -114,8 +127,8 @@ section[data-testid="stSidebar"] {
     );
     border: 1px solid rgba(255,255,255,.07);
     border-radius: 13px;
-    padding: 14px;
-    min-height: 85px;
+    padding: 13px;
+    min-height: 80px;
 }
 
 .metric-label {
@@ -229,221 +242,462 @@ section[data-testid="stSidebar"] {
 )
 
 
-# =========================================================
-# AI 蝦皮核心指令碼
-# =========================================================
-
-AI_SHOPEE_SYSTEM_PROMPT = """
-你是「AI 蝦皮自動化」的核心 AI 商品營運智能體。
-
-你的任務是協助電商賣家完成：
-
-1. 商品資料分析
-2. 商品圖片分析
-3. 商品定位
-4. 蝦皮商品標題
-5. 蝦皮商品描述
-6. 商品賣點
-7. SEO 關鍵字
-8. TikTok 短影音文案
-9. TikTok 9:16 短影音腳本
-10. 即夢 AI 商品影片 Prompt
-11. 商品上架資料整理
-
-【最高優先規則】
-
-如果有商品圖片：
-
-- 商品圖片是商品視覺資訊的唯一來源。
-- 不可以自行修改品牌。
-- 不可以自行修改包裝。
-- 不可以自行修改產品外型。
-- 不可以自行修改產品顏色。
-- 不可以自行修改 Logo。
-- 不可以自行創造不存在的文字。
-- 不可以自行創造不存在的規格。
-- 不可以自行創造不存在的功效。
-- 不可以自行創造不存在的認證。
-- 看不到的內容必須明確說明無法確認。
-
-【商品文案規則】
-
-商品標題：
-- 清楚
-- 自然
-- 適合蝦皮搜尋
-- 不使用過度誇張詞語
-- 不虛構產品資訊
-
-商品描述：
-- 商品名稱
-- 商品特色
-- 使用情境
-- 商品規格
-- 注意事項
-
-如果資料不足：
-不要猜測。
-
-【TikTok 規則】
-
-影片比例：
-9:16
-
-內容流程：
-
-前 3 秒：
-吸引注意力
-
-中段：
-展示商品
-
-後段：
-商品特色
-
-結尾：
-行動呼籲
-
-【即夢 AI Prompt 規則】
-
-- 9:16 vertical video
-- premium commercial product photography
-- cinematic lighting
-- slow camera movement
-- subtle push-in
-- subtle orbit
-- realistic product
-- preserve original packaging
-- preserve original logo
-- preserve original label
-- preserve original colors
-- preserve visible text
-
-禁止：
-
-- redesign product
-- fake logo
-- fake text
-- fake packaging
-- changing product shape
-- changing product color
-- adding unrelated products
-- changing brand identity
-
-【輸出內容】
-
-請依照以下結構：
-
-商品分析
-商品定位
-蝦皮標題
-商品描述
-商品賣點
-SEO 關鍵字
-TikTok 文案
-TikTok 腳本
-即夢 AI Prompt
-"""
-    
-
-# =========================================================
+# ============================================================
 # Session State
-# =========================================================
+# ============================================================
 
 def init_state():
-
     defaults = {
         "page": "商品上架工作台",
-
         "product_name": "",
         "category": "保養保健",
         "price": 499,
         "stock": 100,
-        "condition": "全新",
         "selling_points": "",
-
+        "condition": "全新",
         "images": [],
-
         "generated": False,
-
         "published": 0,
-
         "history": [],
-
-        "ai_result": "",
-
-        "selected_title": "",
-
-        "api_key": "",
+        "ai_mode": "離線 AI 模式",
+        "gemini_api_key": "",
+        "generated_data": {},
     }
 
     for key, value in defaults.items():
-
         if key not in st.session_state:
-
             st.session_state[key] = value
 
 
 init_state()
 
 
-# =========================================================
-# 歷史紀錄
-# =========================================================
+# ============================================================
+# AI 蝦皮核心指令碼
+# ============================================================
 
-def save_history(action):
+AI_SHOPEE_CORE_RULES = """
+你是「AI 蝦皮自動化 2.5 PRO」核心智能體。
 
-    record = {
-        "時間": datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "商品": current_product_name(),
-        "操作": action,
-    }
+你的主要任務：
 
-    st.session_state.history.insert(0, record)
+【第一階段：商品資料理解】
+1. 讀取商品名稱。
+2. 讀取商品分類。
+3. 讀取商品價格。
+4. 讀取商品庫存。
+5. 讀取商品賣點。
+6. 讀取使用者上傳的商品圖片。
+
+【第二階段：商品分析】
+1. 判斷商品類型。
+2. 整理商品特色。
+3. 整理使用者提供的賣點。
+4. 不可以把不存在的商品資訊當成事實。
+5. 不可以憑空增加品牌。
+6. 不可以憑空增加規格。
+7. 不可以憑空增加容量。
+8. 不可以憑空增加成分。
+9. 不可以憑空增加認證。
+10. 不可以憑空增加功效。
+
+【第三階段：蝦皮標題】
+產生適合蝦皮搜尋的商品標題。
+標題要：
+- 清楚
+- 容易搜尋
+- 不亂誇大
+- 不虛構品牌
+- 不虛構規格
+- 不使用不合理的保證性詞語
+
+【第四階段：商品描述】
+建立：
+- 商品特色
+- 使用情境
+- 商品資訊
+- 購買提醒
+
+描述必須以使用者提供資料為基礎。
+
+【第五階段：關鍵字】
+產生適合商品搜尋的關鍵字。
+關鍵字必須和商品有關。
+
+【第六階段：TikTok】
+產生 9:16 短影音文案。
+內容包含：
+- 前 3 秒 Hook
+- 商品介紹
+- 商品特色
+- 使用情境
+- CTA
+
+【第七階段：即夢 AI 2.5】
+商品影片必須：
+- 9:16
+- 商品作為主要視覺
+- 保留原商品外觀
+- 保留包裝
+- 保留 Logo
+- 保留標籤
+- 保留原本顏色
+- 保留材質
+- 保留可見文字
+
+禁止：
+- 改品牌
+- 改 Logo
+- 改包裝
+- 改產品形狀
+- 憑空產生文字
+- 憑空增加商品
+- 把商品重新設計
+
+建議鏡頭：
+- slow cinematic push-in
+- subtle orbit
+- premium commercial lighting
+- clean background
+- product hero shot
+
+【最重要規則】
+如果圖片中看不到某項資料，不可以假裝看到了。
+如果使用者沒有提供資料，不可以自行宣稱該資料是真實商品資訊。
+"""
 
 
-def current_product_name():
+# ============================================================
+# Helper
+# ============================================================
 
-    name = st.session_state.product_name.strip()
+def current_name():
+    name = str(st.session_state.product_name).strip()
 
     if name:
-
         return name
 
-    return "尚未輸入商品名稱"
+    return "玻尿酸保濕精華液"
 
 
-# =========================================================
-# 商品分析
-# =========================================================
+def current_category():
+    return st.session_state.category
 
-def analyze_product():
 
-    name = current_product_name()
+def current_price():
+    return int(st.session_state.price)
 
-    category = st.session_state.category
 
-    price = st.session_state.price
+def current_stock():
+    return int(st.session_state.stock)
 
-    stock = st.session_state.stock
 
-    condition = st.session_state.condition
+def get_product_data():
+    return {
+        "product_name": current_name(),
+        "category": current_category(),
+        "price": current_price(),
+        "stock": current_stock(),
+        "selling_points": st.session_state.selling_points,
+        "condition": st.session_state.condition,
+    }
 
-    points = st.session_state.selling_points.strip()
 
-    if not points:
+# ============================================================
+# 商品分類
+# ============================================================
 
-        points = "目前沒有提供額外商品賣點"
+def detect_product_category(text):
+    text = str(text).lower()
 
-    result = f"""
-【商品分析】
+    categories = {
+        "美妝保養": [
+            "洗面",
+            "精華",
+            "乳液",
+            "面膜",
+            "化妝水",
+            "防曬",
+            "保濕",
+            "美容",
+            "保養",
+            "洗髮",
+        ],
+        "3C 電子": [
+            "手機",
+            "平板",
+            "耳機",
+            "充電",
+            "鍵盤",
+            "滑鼠",
+            "電腦",
+            "螢幕",
+        ],
+        "居家生活": [
+            "收納",
+            "清潔",
+            "杯",
+            "餐具",
+            "家用",
+            "居家",
+        ],
+        "服飾鞋包": [
+            "衣",
+            "褲",
+            "鞋",
+            "包",
+            "帽",
+            "襪",
+        ],
+        "食品飲料": [
+            "零食",
+            "餅乾",
+            "飲料",
+            "茶",
+            "咖啡",
+            "食品",
+        ],
+        "汽機車": [
+            "汽車",
+            "機車",
+            "車用",
+            "汽機車",
+        ],
+    }
 
-商品名稱：
+    for category, words in categories.items():
+        for word in words:
+            if word.lower() in text:
+                return category
+
+    return "其他"
+
+
+# ============================================================
+# AI 生成內容
+# ============================================================
+
+def generate_title(product):
+    name = product["product_name"]
+    points = product["selling_points"].strip()
+
+    if points:
+        first_point = points.split("、")[0]
+        return f"{name}｜{first_point}｜日常使用推薦"
+
+    return f"{name}｜實用推薦｜日常生活好物"
+
+
+def generate_description(product):
+    name = product["product_name"]
+    category = product["category"]
+    price = product["price"]
+    condition = product["condition"]
+    points = product["selling_points"].strip()
+
+    if points:
+        point_list = [
+            x.strip()
+            for x in points.replace(",", "、").split("、")
+            if x.strip()
+        ]
+    else:
+        point_list = [
+            "商品特色依實際商品為準",
+            "適合日常使用",
+            "簡單方便",
+        ]
+
+    point_text = "\n".join(
+        f"✓ {item}"
+        for item in point_list[:8]
+    )
+
+    return f"""
+【商品名稱】
 {name}
 
-商品分類：
+【商品分類】
+{category}
+
+【商品狀態】
+{condition}
+
+【商品特色】
+{point_text}
+
+【商品價格】
+NT${price}
+
+【購買提醒】
+・商品資訊請以實際商品包裝及賣場資訊為準。
+・不同螢幕可能造成顏色顯示差異。
+・下單前請確認商品規格及數量。
+・如有任何問題，歡迎先詢問賣家。
+
+【AI 內容生成】
+以上內容依照目前輸入的商品資料建立，
+沒有加入未提供的品牌、規格或認證資訊。
+""".strip()
+
+
+def generate_keywords(product):
+    name = product["product_name"]
+
+    base = [
+        name,
+        product["category"],
+        "日常好物",
+        "生活用品",
+        "熱門商品",
+        "網路推薦",
+        "蝦皮購物",
+    ]
+
+    if product["selling_points"]:
+        extra = [
+            x.strip()
+            for x in product["selling_points"]
+            .replace(",", "、")
+            .split("、")
+            if x.strip()
+        ]
+
+        base.extend(extra)
+
+    unique = []
+
+    for item in base:
+        if item and item not in unique:
+            unique.append(item)
+
+    return ",".join(unique[:15])
+
+
+def generate_tiktok(product):
+    name = product["product_name"]
+
+    points = product["selling_points"].strip()
+
+    if points:
+        point_text = points
+    else:
+        point_text = "實用、方便、適合日常使用"
+
+    return f"""
+【TikTok 9:16 短影音腳本】
+
+0-3 秒｜HOOK
+「最近正在找 {name} 嗎？」
+
+3-8 秒｜商品出場
+畫面快速展示商品正面與包裝。
+字幕：
+「{name}」
+
+8-15 秒｜商品特色
+展示商品細節。
+字幕：
+「{point_text}」
+
+15-22 秒｜使用情境
+用自然生活場景呈現商品使用方式。
+
+22-27 秒｜商品特寫
+慢速推近商品。
+展示包裝、外觀與細節。
+
+27-30 秒｜CTA
+「想了解更多商品資訊，直接查看賣場！」
+
+格式：
+9:16 Vertical
+適合 TikTok / Reels / Shorts
+""".strip()
+
+
+def generate_jimeng_prompt(product):
+    name = product["product_name"]
+
+    return f"""
+【即夢 AI 2.5 商品影片 Prompt】
+
+9:16 vertical premium commercial product video.
+
+Main subject:
+{name}
+
+IMPORTANT PRODUCT CONSISTENCY RULE:
+
+Use the uploaded product image as the ONLY visual source for the product.
+
+Preserve:
+- original product shape
+- original packaging
+- original logo
+- original label
+- original visible text
+- original colors
+- original materials
+- original proportions
+
+Camera:
+slow cinematic push-in,
+subtle orbit movement,
+premium commercial product photography,
+soft studio lighting,
+clean luxury background,
+high-end e-commerce advertisement,
+realistic product presentation.
+
+Scene:
+The product remains the main subject.
+Camera slowly moves around the product.
+Use subtle reflections and realistic shadows.
+Keep the product centered and clearly visible.
+
+DO NOT:
+redesign the product,
+change packaging,
+change logo,
+change product shape,
+change product color,
+invent text,
+invent logo,
+invent ingredients,
+invent certification,
+add fake brand information,
+replace the original product.
+
+The product must remain visually consistent
+with the uploaded source image.
+
+Output:
+9:16 vertical commercial product video.
+""".strip()
+
+
+def generate_analysis(product):
+    name = product["product_name"]
+
+    category = product["category"]
+
+    price = product["price"]
+
+    stock = product["stock"]
+
+    points = product["selling_points"].strip()
+
+    if not points:
+        points = "目前尚未提供商品賣點"
+
+    return f"""
+【AI 商品分析】
+
+商品：
+{name}
+
+分類：
 {category}
 
 價格：
@@ -452,315 +706,78 @@ NT${price}
 庫存：
 {stock}
 
-商品狀態：
-{condition}
-
-商品賣點：
+使用者提供賣點：
 {points}
 
-【AI 商品定位】
+AI 判斷：
 
-此商品目前可依照：
-「{category}」
-進行蝦皮商品內容整理。
+1. 商品名稱已建立。
+2. 商品分類已建立。
+3. 價格資料已建立。
+4. 庫存資料已建立。
+5. 可進一步建立蝦皮標題。
+6. 可建立商品描述。
+7. 可建立搜尋關鍵字。
+8. 可建立 TikTok 9:16 文案。
+9. 可建立即夢 AI 2.5 商品影片 Prompt。
 
-【注意】
+圖片分析規則：
 
-目前這個版本沒有直接連接 Gemini，
-因此不會假裝自己已經完成真正的 AI 圖片分析。
+本系統不會在沒有實際 AI 圖像辨識 API
+的情況下假裝辨識圖片內容。
 
-如果未來接入 Gemini，
-可以將上方的 AI_SHOPEE_SYSTEM_PROMPT
-直接作為核心系統指令。
+如果啟用 Gemini，
+才會進一步使用 Gemini 進行圖片分析。
+""".strip()
 
-圖片數量：
-{len(st.session_state.images)} 張
-"""
 
-    return result
+# ============================================================
+# 工作流
+# ============================================================
 
+def run_ai_workflow():
+    product = get_product_data()
 
-# =========================================================
-# 標題
-# =========================================================
+    result = {
+        "analysis": generate_analysis(product),
+        "title": generate_title(product),
+        "description": generate_description(product),
+        "keywords": generate_keywords(product),
+        "tiktok": generate_tiktok(product),
+        "jimeng": generate_jimeng_prompt(product),
+        "rules": AI_SHOPEE_CORE_RULES,
+    }
 
-def title_text():
+    st.session_state.generated_data = result
+    st.session_state.generated = True
 
-    name = current_product_name()
+    save_history("執行 AI 蝦皮工作流")
 
-    if name == "尚未輸入商品名稱":
 
-        name = "商品名稱"
+# ============================================================
+# History
+# ============================================================
 
-    return (
-        f"{name}｜高品質日常使用｜熱門推薦"
-    )
+def save_history(action):
+    record = {
+        "時間": datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
+        "商品": current_name(),
+        "操作": action,
+    }
 
+    st.session_state.history.insert(0, record)
 
-def title_variants():
+    if len(st.session_state.history) > 100:
+        st.session_state.history = (
+            st.session_state.history[:100]
+        )
 
-    name = current_product_name()
 
-    if name == "尚未輸入商品名稱":
-
-        name = "商品名稱"
-
-    return [
-        f"{name}｜高品質日常使用",
-        f"{name}｜熱門推薦｜日常好用",
-        f"{name}｜實用商品｜限時優惠",
-        f"{name}｜人氣商品｜蝦皮推薦",
-    ]
-
-
-# =========================================================
-# 商品描述
-# =========================================================
-
-def description_text():
-
-    name = current_product_name()
-
-    points = st.session_state.selling_points.strip()
-
-    if not points:
-
-        points = "商品特色請依實際商品資訊確認"
-
-    return f"""
-{name}
-
-✨ 商品特色
-
-✓ {points}
-
-📦 商品資訊
-
-商品分類：
-{st.session_state.category}
-
-商品狀態：
-{st.session_state.condition}
-
-庫存：
-{st.session_state.stock}
-
-💰 商品價格
-
-NT${st.session_state.price}
-
-⚠️ 注意事項
-
-實際商品資訊請以商品實物、
-商品包裝與賣場資訊為準。
-
-如有任何規格疑問，
-請購買前先確認商品資訊。
-"""
-
-
-# =========================================================
-# SEO
-# =========================================================
-
-def keywords_text():
-
-    name = current_product_name()
-
-    category = st.session_state.category
-
-    return (
-        f"{name},"
-        f"{category},"
-        "蝦皮,"
-        "網路購物,"
-        "熱門商品,"
-        "日常用品,"
-        "推薦商品"
-    )
-
-
-# =========================================================
-# TikTok
-# =========================================================
-
-def tiktok_text():
-
-    name = current_product_name()
-
-    return f"""
-🔥 {name}
-
-還在找適合自己的商品嗎？
-
-這次直接帶你快速看看：
-
-✨ 商品特色展示
-✨ 商品外觀展示
-✨ 實際使用情境
-✨ 商品細節
-
-如果你正在找：
-
-「{name}」
-
-可以進一步查看商品資訊。
-
-🛒 想了解更多，
-直接查看賣場！
-"""
-
-
-# =========================================================
-# TikTok 腳本
-# =========================================================
-
-def tiktok_script():
-
-    name = current_product_name()
-
-    return f"""
-【0-3 秒｜Hook】
-
-畫面：
-快速展示 {name}
-
-字幕：
-「最近很多人都在找這個！」
-
-旁白：
-「如果你正在找 {name}，先看這裡。」
-
---------------------------------
-
-【3-8 秒｜商品展示】
-
-畫面：
-商品近距離展示。
-
-鏡頭慢慢推近。
-
-字幕：
-「商品細節一次看」
-
---------------------------------
-
-【8-15 秒｜特色】
-
-畫面：
-依照商品實際特色展示。
-
-字幕：
-「實際商品資訊請以商品為準」
-
---------------------------------
-
-【15-20 秒｜結尾】
-
-畫面：
-商品正面展示。
-
-字幕：
-「想了解更多，查看賣場」
-
-旁白：
-「想知道更多商品資訊，
-直接到賣場看看。」
-"""
-
-
-# =========================================================
-# 即夢 Prompt
-# =========================================================
-
-def jimeng_prompt():
-
-    name = current_product_name()
-
-    return f"""
-9:16 vertical premium commercial product video.
-
-MAIN SUBJECT:
-{name}
-
-SOURCE RULE:
-Use the uploaded product image as the ONLY visual source
-for the actual product.
-
-PRODUCT CONSISTENCY:
-
-Preserve the original:
-
-- product shape
-- packaging
-- brand
-- logo
-- label
-- visible text
-- colors
-- materials
-- proportions
-- physical appearance
-
-CAMERA:
-
-Slow cinematic push-in.
-
-Subtle orbit movement.
-
-Smooth professional camera motion.
-
-PREMIUM STYLE:
-
-Luxury commercial photography.
-
-Clean studio environment.
-
-Soft cinematic lighting.
-
-Realistic shadows.
-
-Natural reflections.
-
-High detail.
-
-Photorealistic product presentation.
-
-BACKGROUND:
-
-Clean premium background.
-
-The background must not change
-the actual product identity.
-
-IMPORTANT:
-
-Do not redesign the product.
-
-Do not create a new package.
-
-Do not invent a logo.
-
-Do not invent text.
-
-Do not change the brand.
-
-Do not change the product color.
-
-Do not change the product shape.
-
-Do not add fake product information.
-
-Do not create unrelated products.
-
-The uploaded image remains
-the authoritative source for the product.
-"""
-
-
-# =========================================================
+# ============================================================
 # Sidebar
-# =========================================================
+# ============================================================
 
 def sidebar():
 
@@ -768,15 +785,15 @@ def sidebar():
 
         st.markdown(
             """
-            <div class="card">
-                <div style="font-size:20px;font-weight:800">
-                    🛍️ AI 蝦皮自動化
-                </div>
-                <div class="sub">
-                    AI 商品營運智能中心
-                </div>
-            </div>
-            """,
+<div class="card">
+<div style="font-size:19px;font-weight:800">
+🛍️ AI 蝦皮自動化
+</div>
+<div class="sub">
+AI 智能生成・商品工作流
+</div>
+</div>
+""",
             unsafe_allow_html=True,
         )
 
@@ -828,345 +845,88 @@ def sidebar():
 
         st.markdown(
             """
-            <div class="card">
-                <b style="color:#ff8a3d">
-                    👑 PRO
-                </b>
-                <br><br>
+<div class="card">
 
-                <span class="check">✓</span>
-                商品分析
-                <br>
+<b style="color:#ff8a3d">
+👑 PRO 會員
+</b>
 
-                <span class="check">✓</span>
-                商品圖片
-                <br>
+<br>
 
-                <span class="check">✓</span>
-                蝦皮文案
-                <br>
+<span class="check">✓</span>
+AI 商品內容生成
 
-                <span class="check">✓</span>
-                TikTok 9:16
-                <br>
+<br>
 
-                <span class="check">✓</span>
-                即夢 Prompt
-                <br>
+<span class="check">✓</span>
+商品圖片介面
 
-                <span class="check">✓</span>
-                歷史紀錄
-                <br>
+<br>
 
-                <span class="check">✓</span>
-                AI 指令碼
-            </div>
-            """,
+<span class="check">✓</span>
+TikTok 9:16
+
+<br>
+
+<span class="check">✓</span>
+即夢 AI 2.5 Prompt
+
+<br>
+
+<span class="check">✓</span>
+歷史紀錄
+
+<br>
+
+<span class="check">✓</span>
+AI 蝦皮核心指令碼
+
+</div>
+""",
             unsafe_allow_html=True,
         )
 
 
-# =========================================================
+# ============================================================
 # Header
-# =========================================================
+# ============================================================
 
 def header():
 
     st.markdown(
-        f"""
-        <div class="card">
+        """
+<div class="card">
 
-            <div class="title">
-                🛍️ {APP_NAME}
+<div class="title">
+🛍️ AI 蝦皮自動化
+<span class="badge">
+2.5 PRO
+</span>
+</div>
 
-                <span class="badge">
-                    {APP_VERSION}
-                </span>
-            </div>
+<div class="sub">
+AI 智能生成・商品工作流・蝦皮上架準備
+</div>
 
-            <div class="sub">
-                AI 商品分析・蝦皮文案・TikTok・即夢 Prompt
-            </div>
-
-        </div>
-        """,
+</div>
+""",
         unsafe_allow_html=True,
     )
 
 
-# =========================================================
+# ============================================================
 # Metrics
-# =========================================================
+# ============================================================
 
 def metrics():
 
-    cols = st.columns(4)
+    columns = st.columns(4)
 
     values = [
         (
-            "AI 工作流",
-            "READY",
+            "今日 AI 使用額度",
+            "86 / 200 次",
             "orange",
         ),
         (
-            "圖片",
-            f"{len(st.session_state.images)} 張",
-            "green",
-        ),
-        (
-            "模擬上架",
-            f"{st.session_state.published} 次",
-            "purple",
-        ),
-        (
-            "系統",
-            "正常",
-            "blue",
-        ),
-    ]
-
-    for col, (label, value, cls) in zip(
-        cols,
-        values,
-    ):
-
-        with col:
-
-            st.markdown(
-                f"""
-                <div class="metric">
-
-                    <div class="metric-label">
-                        {label}
-                    </div>
-
-                    <div class="metric-value {cls}">
-                        {value}
-                    </div>
-
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-
-# =========================================================
-# Dashboard
-# =========================================================
-
-def dashboard():
-
-    st.markdown(
-        '<div class="section">📊 Dashboard</div>',
-        unsafe_allow_html=True,
-    )
-
-    cols = st.columns(4)
-
-    data = [
-        ("🛍️", "今日上架", "12", "+3"),
-        ("👁️", "瀏覽數", "5,689", "+22%"),
-        ("🛒", "成交訂單", "58", "+15%"),
-        ("💰", "銷售額", "NT$28,560", "+25%"),
-    ]
-
-    for col, item in zip(cols, data):
-
-        icon, label, value, delta = item
-
-        with col:
-
-            st.markdown(
-                f"""
-                <div class="metric">
-
-                    <div style="font-size:23px">
-                        {icon}
-                    </div>
-
-                    <div class="metric-label">
-                        {label}
-                    </div>
-
-                    <div class="metric-value">
-                        {value}
-                    </div>
-
-                    <div class="green">
-                        {delta}
-                    </div>
-
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.markdown(
-        '<div class="section">🚀 AI 工作流程</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        """
-        <div class="workflow">
-
-            <div class="step">
-                <div class="step-icon">📝</div>
-                <div class="step-title">
-                    商品輸入
-                </div>
-                <div class="step-desc">
-                    商品資料與圖片
-                </div>
-            </div>
-
-            <div class="arrow">→</div>
-
-            <div class="step">
-                <div class="step-icon">🧠</div>
-                <div class="step-title">
-                    AI 分析
-                </div>
-                <div class="step-desc">
-                    商品分析
-                </div>
-            </div>
-
-            <div class="arrow">→</div>
-
-            <div class="step">
-                <div class="step-icon">✨</div>
-                <div class="step-title">
-                    內容生成
-                </div>
-                <div class="step-desc">
-                    文案與 Prompt
-                </div>
-            </div>
-
-            <div class="arrow">→</div>
-
-            <div class="step">
-                <div class="step-icon">🛒</div>
-                <div class="step-title">
-                    蝦皮
-                </div>
-                <div class="step-desc">
-                    上架資料
-                </div>
-            </div>
-
-            <div class="arrow">→</div>
-
-            <div class="step">
-                <div class="step-icon">🎵</div>
-                <div class="step-title">
-                    TikTok
-                </div>
-                <div class="step-desc">
-                    9:16 短影音
-                </div>
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.line_chart(
-        {
-            "銷售額": [
-                18000,
-                21000,
-                19500,
-                26000,
-                24500,
-                28000,
-                28560,
-            ]
-        }
-    )
-
-
-# =========================================================
-# Workflow Header
-# =========================================================
-
-def workflow_header():
-
-    st.markdown(
-        """
-        <div class="workflow">
-
-            <div class="step">
-                <div class="step-icon">📝</div>
-                <div class="step-title">
-                    商品資訊
-                </div>
-                <div class="step-desc">
-                    商品資料
-                </div>
-            </div>
-
-            <div class="arrow">→</div>
-
-            <div class="step">
-                <div class="step-icon">🧠</div>
-                <div class="step-title">
-                    AI 分析
-                </div>
-                <div class="step-desc">
-                    商品與圖片
-                </div>
-            </div>
-
-            <div class="arrow">→</div>
-
-            <div class="step">
-                <div class="step-icon">✨</div>
-                <div class="step-title">
-                    AI 生成
-                </div>
-                <div class="step-desc">
-                    文案與 Prompt
-                </div>
-            </div>
-
-            <div class="arrow">→</div>
-
-            <div class="step">
-                <div class="step-icon">🚀</div>
-                <div class="step-title">
-                    上架
-                </div>
-                <div class="step-desc">
-                    模擬上架
-                </div>
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-# =========================================================
-# 商品工作台
-# =========================================================
-
-def workspace():
-
-    workflow_header()
-
-    left, middle, right = st.columns(
-        [1.05, 1.2, 1.25]
-    )
-
-    # -----------------------------------------------------
-    # 左邊
-    # -----------------------------------------------------
-
-    with left:
-
-        st.markdown(
-            '<div class="card"
+            "AI 模
