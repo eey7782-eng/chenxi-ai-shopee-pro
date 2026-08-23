@@ -49,15 +49,4 @@ if st.button("🚀 開始生成短影音腳本與文案", type="primary"):
                 st.markdown(response.text)
                 
         except Exception as e:
-            st.error(f"生成過程發生錯誤：{e}")/div></div>', unsafe_allow_html=True)
-
-# -------------------- run --------------------
-sidebar()
-header()
-
-if st.session_state.page == "商品上架工作台":
-    workspace()
-else:
-    generic_page(st.session_state.page)
-
-st.markdown('<div style="text-align:center;color:#52606e;font-size:10px;padding:25px 0 10px">AI 蝦皮自動化 2.5 PRO ・ 全自動一鍵生成版</div>', unsafe_allow_html=True)
+            st.error(f"生成過程發生錯誤：{e}")
