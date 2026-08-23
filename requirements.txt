@@ -1,1 +1,6 @@
-
+streamlit
+google-genai
+edge-tts
+requests
+pandas
+pillow
