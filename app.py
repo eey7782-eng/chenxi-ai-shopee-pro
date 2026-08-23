@@ -1,50 +1,11 @@
-# ============================================================
-# AI 蝦皮自動化 2.5 PRO
-# 單檔 Streamlit 版本
-#
-# 功能：
-# 1. Gemini API
-# 2. 商品圖片分析
-# 3. 商品標題生成
-# 4. 商品描述生成
-# 5. 商品關鍵字
-# 6. 蝦皮上架資料
-# 7. TikTok 9:16 文案
-# 8. TikTok 短影音腳本
-# 9. 即夢 AI 2.5 Prompt
-# 10. 歷史紀錄
-# 11. JSON / TXT 匯出
-#
-# 不使用 google-genai
-# Gemini 使用 HTTP API
-# ============================================================
-
-import os
 import io
-import json
-import base64
 from datetime import datetime
 
 import streamlit as st
 from PIL import Image
 
-
-# ============================================================
-# APP 設定
-# ============================================================
-
 APP_NAME = "AI 蝦皮自動化"
 APP_VERSION = "2.5 PRO"
-
-DEFAULT_MODEL = "gemini-2.5-flash"
-
-MAX_IMAGE_MB = 20
-MAX_IMAGES = 8
-
-
-# ============================================================
-# Streamlit 設定
-# ============================================================
 
 st.set_page_config(
     page_title=f"{APP_NAME} {APP_VERSION}",
@@ -53,1108 +14,281 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-# ============================================================
-# CSS
-# ============================================================
-
-st.markdown(
-    """
+st.markdown("""
 <style>
-
-.stApp {
-    background:
-        radial-gradient(
-            circle at 20% 0%,
-            rgba(255, 90, 0, 0.10),
-            transparent 28%
-        ),
-        #05080d;
-    color: #f5f7fa;
-}
-
-#MainMenu,
-footer {
-    visibility: hidden;
-}
-
-section[data-testid="stSidebar"] {
-    background: linear-gradient(
-        180deg,
-        #0a1018,
-        #070b11
-    );
-    border-right: 1px solid rgba(255,255,255,.08);
-}
-
-.card {
-    background:
-        linear-gradient(
-            145deg,
-            #101923,
-            #090f17
-        );
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 14px;
-    padding: 18px;
-    margin-bottom: 14px;
-}
-
-.title {
-    font-size: 26px;
-    font-weight: 900;
-}
-
-.sub {
-    color: #8995a4;
-    font-size: 12px;
-}
-
-.section {
-    font-size: 18px;
-    font-weight: 900;
-    margin: 14px 0 10px 0;
-}
-
-.badge {
-    display: inline-block;
-    margin-left: 8px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    color: #ff9d52;
-    border: 1px solid #ff6a00;
-    background: rgba(255,90,0,.1);
-}
-
-.metric {
-    background:
-        linear-gradient(
-            145deg,
-            #111a25,
-            #0b1119
-        );
-    border: 1px solid rgba(255,255,255,.07);
-    border-radius: 13px;
-    padding: 14px;
-    min-height: 82px;
-}
-
-.metric-label {
-    font-size: 11px;
-    color: #8995a4;
-}
-
-.metric-value {
-    font-size: 21px;
-    font-weight: 900;
-    margin-top: 4px;
-}
-
-.orange {
-    color: #ff6a00;
-}
-
-.green {
-    color: #50d890;
-}
-
-.blue {
-    color: #4ab7ff;
-}
-
-.purple {
-    color: #b28cff;
-}
-
-.workflow {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    background: #0b121b;
-    border: 1px solid rgba(255,255,255,.07);
-    border-radius: 14px;
-    padding: 12px;
-    margin-bottom: 14px;
-    overflow-x: auto;
-}
-
-.step {
-    min-width: 120px;
-    flex: 1;
-    background: #101923;
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 11px;
-    padding: 10px;
-}
-
-.step-icon {
-    font-size: 22px;
-}
-
-.step-title {
-    font-size: 13px;
-    font-weight: 800;
-}
-
-.step-desc {
-    font-size: 10px;
-    color: #7e8a99;
-}
-
-.arrow {
-    color: #ff6a00;
-    font-size: 20px;
-    font-weight: bold;
-}
-
-.check {
-    color: #49d98c;
-}
-
-.tag {
-    display: inline-block;
-    padding: 5px 9px;
-    margin: 3px;
-    background: #172331;
-    border: 1px solid #293a4b;
-    border-radius: 7px;
-    color: #b8c5d2;
-    font-size: 11px;
-}
-
-.stButton > button {
-    border-radius: 8px !important;
-    background: #111a24 !important;
-    color: #fff !important;
-    font-weight: 700 !important;
-    border: 1px solid rgba(255,255,255,.12) !important;
-}
-
-.stButton > button:hover {
-    border-color: #ff6a00 !important;
-    color: #ff8b42 !important;
-}
-
-.stTextInput input,
-.stNumberInput input,
-.stTextArea textarea {
-    background: #0b121b !important;
-    color: #fff !important;
-    border-radius: 8px !important;
-}
-
-div[data-baseweb="select"] > div {
-    background: #0b121b !important;
-    color: #fff !important;
-}
-
+.stApp{background:radial-gradient(circle at 20% 0%,rgba(255,90,0,.08),transparent 25%),#05080d;color:#f5f7fa}
+#MainMenu,footer{visibility:hidden}
+section[data-testid="stSidebar"]{background:linear-gradient(180deg,#0a1018,#070b11);border-right:1px solid rgba(255,255,255,.08)}
+.card{background:linear-gradient(145deg,#101923,#090f17);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;margin-bottom:14px}
+.title{font-size:24px;font-weight:800}.sub{color:#8995a4;font-size:12px}
+.section{font-size:17px;font-weight:800;margin:10px 0}
+.badge{display:inline-block;margin-left:8px;padding:3px 8px;border-radius:6px;font-size:11px;color:#ff9d52;border:1px solid #ff6a00;background:rgba(255,90,0,.1)}
+.metric{background:linear-gradient(145deg,#111a25,#0b1119);border:1px solid rgba(255,255,255,.07);border-radius:13px;padding:13px;min-height:80px}
+.metric-label{font-size:11px;color:#8995a4}.metric-value{font-size:21px;font-weight:800;margin-top:4px}.orange{color:#ff6a00}.green{color:#50d890}.blue{color:#4ab7ff}.purple{color:#b28cff}
+.workflow{display:flex;gap:8px;align-items:center;background:#0b121b;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px;margin-bottom:14px;overflow-x:auto}
+.step{min-width:130px;flex:1;background:#101923;border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:10px}.step-icon{font-size:22px}.step-title{font-size:13px;font-weight:800}.step-desc{font-size:10px;color:#7e8a99}.arrow{color:#ff6a00;font-size:20px;font-weight:bold}
+.check{color:#49d98c}.tag{display:inline-block;padding:5px 9px;margin:3px;background:#172331;border:1px solid #293a4b;border-radius:7px;color:#b8c5d2;font-size:11px}
+.stButton>button{border-radius:8px!important;background:#111a24!important;color:#fff!important;font-weight:700!important;border:1px solid rgba(255,255,255,.12)!important}
+.stButton>button:hover{border-color:#ff6a00!important;color:#ff8b42!important}
+.stTextInput input,.stNumberInput input,.stTextArea textarea,.stSelectbox div[data-baseweb="select"]>div{background:#0b121b!important;color:#fff!important;border-radius:8px!important}
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
+# -------------------- state --------------------
 def init_state():
-
     defaults = {
         "page": "商品上架工作台",
-
         "product_name": "",
-        "category": "美妝保養",
+        "category": "保養保健",
         "price": 499,
         "stock": 100,
-        "condition": "全新",
         "selling_points": "",
-
+        "condition": "全新",
         "images": [],
-
         "generated": False,
-
-        "analysis": "",
-        "title": "",
-        "description": "",
-        "keywords": "",
-        "selling_point_result": "",
-
-        "tiktok": "",
-        "tiktok_script": "",
-        "jimeng": "",
-
-        "shopee_data": {},
-
-        "history": [],
-
         "published": 0,
-
-        "gemini_key": "",
-        "gemini_model": DEFAULT_MODEL,
-
-        "api_status": "尚未測試",
-        "last_error": "",
+        "history": [],
     }
-
     for key, value in defaults.items():
-
         if key not in st.session_state:
             st.session_state[key] = value
 
-
 init_state()
 
-
-# ============================================================
-# Gemini API Key
-# ============================================================
-
-def get_api_key():
-
-    key = st.session_state.get("gemini_key", "").strip()
-
-    if key:
-        return key
-
-    try:
-        secret_key = st.secrets.get("GEMINI_API_KEY", "")
-
-        if secret_key:
-            return str(secret_key).strip()
-
-    except Exception:
-        pass
-
-    env_key = os.getenv("GEMINI_API_KEY", "")
-
-    return env_key.strip()
-
-
-# ============================================================
-# Gemini HTTP API
-# ============================================================
-
-def gemini_request(contents):
-
-    api_key = get_api_key()
-
-    if not api_key:
-
-        return {
-            "ok": False,
-            "error": "尚未設定 Gemini API Key"
-        }
-
-    model = (
-        st.session_state.get(
-            "gemini_model",
-            DEFAULT_MODEL
-        )
-        or DEFAULT_MODEL
-    ).strip()
-
-    url = (
-        "https://generativelanguage.googleapis.com/"
-        f"v1beta/models/{model}:generateContent"
-        f"?key={api_key}"
-    )
-
-    payload = {
-        "contents": contents,
-        "generationConfig": {
-            "temperature": 0.7,
-            "maxOutputTokens": 5000,
-        }
-    }
-
-    try:
-
-        import urllib.request
-        import urllib.error
-
-        data = json.dumps(
-            payload,
-            ensure_ascii=False
-        ).encode("utf-8")
-
-        request = urllib.request.Request(
-            url,
-            data=data,
-            headers={
-                "Content-Type": "application/json"
-            },
-            method="POST",
-        )
-
-        with urllib.request.urlopen(
-            request,
-            timeout=90
-        ) as response:
-
-            raw = response.read().decode(
-                "utf-8",
-                errors="replace"
-            )
-
-        result = json.loads(raw)
-
-        text = extract_gemini_text(result)
-
-        if not text:
-
-            return {
-                "ok": False,
-                "error": "Gemini 沒有回傳文字內容"
-            }
-
-        st.session_state.api_status = "Gemini API 正常"
-
-        return {
-            "ok": True,
-            "text": text
-        }
-
-    except urllib.error.HTTPError as e:
-
-        try:
-            error_body = e.read().decode(
-                "utf-8",
-                errors="replace"
-            )
-        except Exception:
-            error_body = ""
-
-        message = explain_http_error(
-            e.code,
-            error_body
-        )
-
-        st.session_state.api_status = "API 錯誤"
-        st.session_state.last_error = message
-
-        return {
-            "ok": False,
-            "error": message
-        }
-
-    except Exception as e:
-
-        message = (
-            "Gemini 連線失敗："
-            + str(e)
-        )
-
-        st.session_state.api_status = "連線失敗"
-        st.session_state.last_error = message
-
-        return {
-            "ok": False,
-            "error": message
-        }
-
-
-# ============================================================
-# Gemini 回應解析
-# ============================================================
-
-def extract_gemini_text(result):
-
-    try:
-
-        candidates = result.get(
-            "candidates",
-            []
-        )
-
-        if not candidates:
-            return ""
-
-        candidate = candidates[0]
-
-        content = candidate.get(
-            "content",
-            {}
-        )
-
-        parts = content.get(
-            "parts",
-            []
-        )
-
-        texts = []
-
-        for part in parts:
-
-            if isinstance(part, dict):
-
-                text = part.get("text")
-
-                if text:
-                    texts.append(text)
-
-        return "\n".join(texts).strip()
-
-    except Exception:
-
-        return ""
-
-
-# ============================================================
-# Gemini 錯誤說明
-# ============================================================
-
-def explain_http_error(code, body):
-
-    body_lower = body.lower()
-
-    if code == 400:
-        return (
-            "Gemini API 400：請檢查 API Key、"
-            "模型名稱或請求格式。"
-        )
-
-    if code == 401:
-        return (
-            "Gemini API 401：API Key 無效，"
-            "請重新建立或確認 Gemini API Key。"
-        )
-
-    if code == 403:
-        return (
-            "Gemini API 403：API Key 沒有權限，"
-            "請確認 Gemini API 是否已啟用。"
-        )
-
-    if code == 404:
-        return (
-            "Gemini API 404：目前設定的模型不存在或不可用。"
-            "可以把模型改成 gemini-2.5-flash。"
-        )
-
-    if code == 429:
-        return (
-            "Gemini API 429：目前超過使用限制或配額。"
-        )
-
-    if code >= 500:
-        return (
-            f"Gemini 伺服器錯誤 HTTP {code}。"
-        )
-
-    if "quota" in body_lower:
-        return (
-            "Gemini API 配額不足。"
-        )
-
-    return (
-        f"Gemini API 發生 HTTP {code} 錯誤。"
-    )
-
-
-# ============================================================
-# 圖片轉 Gemini
-# ============================================================
-
-def image_to_part(uploaded_file):
-
-    data = uploaded_file.getvalue()
-
-    if not data:
-        return None
-
-    if len(data) > MAX_IMAGE_MB * 1024 * 1024:
-        return None
-
-    mime = uploaded_file.type
-
-    if not mime:
-        mime = "image/jpeg"
-
-    encoded = base64.b64encode(
-        data
-    ).decode("utf-8")
-
-    return {
-        "inline_data": {
-            "mime_type": mime,
-            "data": encoded
-        }
-    }
-
-
-# ============================================================
-# 商品名稱
-# ============================================================
-
-def current_product_name():
-
-    name = (
-        st.session_state
-        .get("product_name", "")
-        .strip()
-    )
-
-    if name:
-        return name
-
-    return "我的商品"
-
-
-# ============================================================
-# 本地預設內容
-# ============================================================
-
-def local_title():
-
-    return (
-        f"{current_product_name()}｜"
-        f"高品質商品｜日常使用推薦"
-    )
-
-
-def local_description():
-
-    name = current_product_name()
-
-    return f"""【商品名稱】
-{name}
-
-【商品介紹】
-{name}，適合日常使用。
-
-【商品特色】
-✓ 商品資訊清楚
-✓ 方便日常使用
-✓ 商品包裝以實際圖片為準
-✓ 商品規格以賣場實際資訊為準
-
-【注意事項】
-實際商品資訊、規格、容量、顏色及包裝，
-請以商品實際收到的商品為準。
-"""
-
-
-def local_keywords():
-
-    return (
-        "商品推薦,日常用品,"
-        "熱門商品,生活好物,"
-        "蝦皮購物"
-    )
-
-
-def local_tiktok():
-
-    name = current_product_name()
-
-    return f"""🔥 {name}
-
-最近正在找實用好物嗎？
-
-這款 {name}
-適合放進日常生活使用。
-
-✨ 商品特色
-✓ 簡單實用
-✓ 日常方便
-✓ 商品資訊清楚
-
-🛒 想了解更多
-可以到賣場看看！
-
-#好物推薦 #蝦皮購物 #生活好物
-"""
-
-
-def local_tiktok_script():
-
-    name = current_product_name()
-
-    return f"""【0-3秒】
-畫面快速帶出 {name}
-字幕：
-「最近很多人都在找這個！」
-
-【3-7秒】
-商品近距離展示。
-鏡頭慢慢推近。
-
-字幕：
-「{name}」
-
-【7-12秒】
-展示商品外觀、包裝與細節。
-
-字幕：
-「實際商品以圖片為準」
-
-【12-16秒】
-展示商品使用情境。
-
-字幕：
-「日常生活好物」
-
-【16-20秒】
-商品主視覺＋行動呼籲。
-
-字幕：
-「想了解更多，前往賣場看看！」
-
-影片比例：
-9:16
-
-影片風格：
-乾淨、自然、商業廣告感。
-"""
-
-
-def local_jimeng():
-
-    name = current_product_name()
-
-    return f"""【即夢 AI 2.5 商品影片 Prompt】
-
-9:16 vertical premium commercial product video.
-
-Main product:
-{name}
-
-IMPORTANT PRODUCT PRESERVATION RULES:
-
-Use the uploaded product image as the ONLY visual source
-for the actual product appearance.
-
-Preserve exactly:
-
-- original product shape
-- original packaging
-- original colors
-- original materials
-- original logo
-- original label
-- original visible text
-- original proportions
-- original product structure
-
-Do NOT:
-
-- redesign the product
-- change packaging
-- invent logo
-- invent brand
-- invent product text
-- modify label
-- change product color
-- change product shape
-- create a different product
-
-Camera:
-
-slow cinematic push-in,
-subtle orbit movement,
-gentle close-up,
-premium commercial photography.
-
-Lighting:
-
-soft studio lighting,
-realistic reflections,
-clean premium atmosphere.
-
-Background:
-
-minimal,
-clean,
-luxury commercial background.
-
-Movement:
-
-slow and stable,
-no shaking,
-no sudden camera movement.
-
-Final frame:
-
-clear hero shot of the original product.
-
-Format:
-9:16 vertical.
-"""
-
-
-# ============================================================
-# AI 商品分析
-# ============================================================
-
-def run_product_analysis():
-
-    name = current_product_name()
-
-    category = st.session_state.category
-    price = st.session_state.price
-    stock = st.session_state.stock
-    points = st.session_state.selling_points
-
-    image_parts = []
-
-    for image_file in st.session_state.images[:MAX_IMAGES]:
-
-        part = image_to_part(image_file)
-
-        if part:
-            image_parts.append(part)
-
-    prompt = f"""
-你現在是「AI 蝦皮商品分析智能體」。
-
-請分析使用者提供的商品資料與商品圖片。
-
-商品名稱：
-{name}
-
-商品分類：
-{category}
-
-價格：
-NT${price}
-
-庫存：
-{stock}
-
-使用者提供的賣點：
-{points}
-
-非常重要：
-
-商品圖片中的商品外觀是唯一可信的商品視覺來源。
-
-禁止自行虛構：
-
-- 品牌
-- Logo
-- 包裝
-- 規格
-- 容量
-- 顏色
-- 成分
-- 功效
-- 認證
-- 商品文字
-
-如果圖片看不到某項資料，
-請明確寫「圖片未確認」。
-
-請輸出：
-
-1. 商品整體分析
-2. 商品可見外觀
-3. 商品可能的銷售重點
-4. 不應虛構的資訊
-5. 蝦皮標題建議
-6. 商品描述
-7. 關鍵字
-8. 商品賣點
-9. TikTok 文案
-10. TikTok 20 秒腳本
-11. 即夢 AI 2.5 Prompt
-
-TikTok 必須使用 9:16。
-
-即夢 Prompt 必須要求：
-使用原始商品圖片作為商品唯一視覺來源，
-保持商品原貌，不改 Logo、不改包裝、不改文字。
-
-請使用繁體中文。
-"""
-
-    contents = [
-        {
-            "parts": [
-                {
-                    "text": prompt
-                }
-            ]
-        }
-    ]
-
-    # 如果有圖片，附加到同一個 content
-    if image_parts:
-
-        contents[0]["parts"].extend(
-            image_parts
-        )
-
-    result = gemini_request(contents)
-
-    if result.get("ok"):
-
-        st.session_state.analysis = result["text"]
-
-        # 如果 Gemini 有成功，就保留原始 AI 結果
-        # 同時建立其他欄位的安全預設
-        st.session_state.title = local_title()
-        st.session_state.description = local_description()
-        st.session_state.keywords = local_keywords()
-        st.session_state.selling_point_result = (
-            st.session_state.selling_points
-            or "請依實際商品圖片確認商品賣點。"
-        )
-        st.session_state.tiktok = local_tiktok()
-        st.session_state.tiktok_script = local_tiktok_script()
-        st.session_state.jimeng = local_jimeng()
-
-        st.session_state.generated = True
-
-        return True, "Gemini 分析完成"
-
-    else:
-
-        return False, result.get(
-            "error",
-            "Gemini 分析失敗"
-        )
-
-
-# ============================================================
-# 產生內容
-# ============================================================
-
-def generate_all_content():
-
-    name = current_product_name()
-
-    # --------------------------------------------------------
-    # 如果有 Gemini，使用 Gemini
-    # --------------------------------------------------------
-
-    if get_api_key():
-
-        prompt = f"""
-你是專業的台灣蝦皮電商 AI。
-
-商品名稱：
-{name}
-
-商品分類：
-{st.session_state.category}
-
-價格：
-NT${st.session_state.price}
-
-庫存：
-{st.session_state.stock}
-
-商品狀態：
-{st.session_state.condition}
-
-使用者賣點：
-{st.session_state.selling_points}
-
-請根據商品圖片與以上資料，
-產生以下內容：
-
-【A 商品標題】
-適合蝦皮搜尋與商品展示。
-
-【B 商品描述】
-繁體中文。
-
-【C 關鍵字】
-用逗號分隔。
-
-【D 商品賣點】
-列出 5 點。
-
-【E TikTok 文案】
-適合短影音。
-
-【F TikTok 20 秒腳本】
-9:16。
-
-【G 即夢 AI 2.5 Prompt】
-要求：
-1. 商品圖片為唯一商品視覺來源。
-2. 保持商品原始外觀。
-3. 不修改 Logo。
-4. 不修改包裝。
-5. 不修改商品文字。
-6. 不改變商品顏色。
-7. 不改變商品形狀。
-8. 不虛構品牌。
-
-請使用以下格式：
-
-[A]
-...
-
-[B]
-...
-
-[C]
-...
-
-[D]
-...
-
-[E]
-...
-
-[F]
-...
-
-[G]
-...
-"""
-
-        image_parts = []
-
-        for image_file in st.session_state.images[:MAX_IMAGES]:
-
-            part = image_to_part(image_file)
-
-            if part:
-                image_parts.append(part)
-
-        contents = [
-            {
-                "parts": [
-                    {
-                        "text": prompt
-                    }
-                ]
-            }
+# -------------------- helpers --------------------
+def current_name():
+    return st.session_state.product_name.strip() or "玻尿酸保濕精華液"
+
+def title_text():
+    return f"{current_name()}｜深層保濕修護｜日常補水保養"
+
+def description_text():
+    return f"""{current_name()}\n\n✨ 商品特色\n✓ 深層保濕補水\n✓ 修護日常保養\n✓ 溫和好使用\n✓ 清爽不黏膩\n\n實際商品資訊請以商品包裝及賣場資訊為準。"""
+
+def keywords_text():
+    return "保濕,補水,修護,保養,美容,肌膚,日常保養"
+
+def tiktok_text():
+    return f"""🔥 {current_name()}\n\n乾燥、缺水怎麼辦？\n用簡單的日常保養方式，維持水嫩感。\n\n✨ 商品特色展示\n🛒 想了解更多商品資訊，立即查看賣場！"""
+
+def jimeng_prompt():
+    return f"""9:16 vertical premium commercial product video.\n\nMain subject: {current_name()}\n\nUse the uploaded product image as the ONLY visual source for the product. Preserve original product shape, packaging, logo, label, colors, materials and visible text.\n\nCamera: slow cinematic push-in, subtle orbit movement, premium commercial lighting, clean luxury background.\n\nDo not redesign the product. Do not invent logos. Do not change packaging. Do not add fake text."""
+
+def save_history(action):
+    st.session_state.history.insert(0, {
+        "時間": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "商品": current_name(),
+        "操作": action,
+    })
+
+# -------------------- sidebar --------------------
+def sidebar():
+    with st.sidebar:
+        st.markdown('<div class="card"><div style="font-size:19px;font-weight:800">🛍️ AI 蝦皮自動化</div><div class="sub">AI 智能生成・一鍵上架</div></div>', unsafe_allow_html=True)
+        menus = [
+            ("🏠", "Dashboard"), ("🛍️", "商品上架工作台"), ("📦", "商品管理"),
+            ("🧾", "訂單管理"), ("📊", "數據分析"), ("🖼️", "AI 素材庫"),
+            ("🕘", "歷史紀錄"), ("🎵", "TikTok 短影音"), ("💰", "蝦皮分潤管理"),
         ]
+        for icon, name in menus:
+            if st.button(f"{icon}  {name}", key=f"nav_{name}", use_container_width=True):
+                st.session_state.page = name
+                st.rerun()
+        st.markdown("---")
+        for icon, name in [("👤", "會員管理"), ("🛡️", "管理員中心"), ("⚙️", "系統設定"), ("🔑", "API 設定"), ("📚", "使用教學")]:
+            if st.button(f"{icon}  {name}", key=f"sys_{name}", use_container_width=True):
+                st.session_state.page = name
+                st.rerun()
+        st.markdown('<div class="card"><b style="color:#ff8a3d">👑 PRO 會員</b><br><span class="check">✓</span> AI 內容生成<br><span class="check">✓</span> 商品圖片分析介面<br><span class="check">✓</span> TikTok 9:16<br><span class="check">✓</span> 即夢 Prompt<br><span class="check">✓</span> 歷史紀錄</div>', unsafe_allow_html=True)
 
-        contents[0]["parts"].extend(
-            image_parts
-        )
+# -------------------- header / metrics --------------------
+def header():
+    st.markdown('<div class="card"><div class="title">🛍️ AI 蝦皮自動化 <span class="badge">2.5 PRO</span></div><div class="sub">AI 智能生成・商品工作流・蝦皮上架準備</div></div>', unsafe_allow_html=True)
 
-        result = gemini_request(contents)
+def metrics():
+    cols = st.columns(4)
+    values = [("今日 AI 使用額度", "86 / 200 次", "orange"), ("AI 剩餘額度", "1,248 Tokens", "green"), ("會員等級", "PRO 會員", "purple"), ("會員期限", "永久會員", "blue")]
+    for col, (label, value, cls) in zip(cols, values):
+        with col:
+            st.markdown(f'<div class="metric"><div class="metric-label">{label}</div><div class="metric-value {cls}">{value}</div></div>', unsafe_allow_html=True)
 
-        if result.get("ok"):
+# -------------------- dashboard --------------------
+def dashboard():
+    st.markdown('<div class="section">📊 Dashboard 總覽</div>', unsafe_allow_html=True)
+    cols = st.columns(4)
+    for col, icon, label, value, delta in zip(cols, ["🛍️", "👁️", "🛒", "💰"], ["今日上架商品", "商品瀏覽數", "成交訂單", "銷售額"], ["12", "5,689", "58", "NT$28,560"], ["+3", "+22%", "+15%", "+25%"]):
+        with col:
+            st.markdown(f'<div class="metric"><div style="font-size:23px">{icon}</div><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="green">{delta}</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section">🚀 AI 自動化流程</div>', unsafe_allow_html=True)
+    st.markdown('<div class="workflow">' + '<div class="step"><div class="step-icon">📝</div><div class="step-title">商品輸入</div><div class="step-desc">資料與圖片</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🧠</div><div class="step-title">AI 分析</div><div class="step-desc">分析商品</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">✨</div><div class="step-title">內容生成</div><div class="step-desc">標題與文案</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">⚙️</div><div class="step-title">上架設定</div><div class="step-desc">價格與庫存</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🚀</div><div class="step-title">一鍵上架</div><div class="step-desc">目前為模擬</div></div></div>', unsafe_allow_html=True)
+    a, b = st.columns([2, 1])
+    with a:
+        st.markdown('<div class="card"><b>📈 最近銷售</b></div>', unsafe_allow_html=True)
+        st.line_chart({"銷售額": [18000, 21000, 19500, 26000, 24500, 28000, 28560]})
+    with b:
+        st.markdown('<div class="card"><b>🤖 AI 使用統計</b><h1 style="color:#ff6a00">24.96%</h1>本月使用量<br><br>文案生成：658 次<br>圖片分析：412 次<br>其他功能：178 次</div>', unsafe_allow_html=True)
 
-            text = result["text"]
+# -------------------- workspace --------------------
+def workflow_header():
+    st.markdown('<div class="workflow"><div class="step"><div class="step-icon">📝</div><div class="step-title">商品資訊</div><div class="step-desc">輸入商品</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🧠</div><div class="step-title">AI 分析</div><div class="step-desc">分析圖片與資料</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">✨</div><div class="step-title">內容生成</div><div class="step-desc">文案與 Prompt</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🚀</div><div class="step-title">上架</div><div class="step-desc">目前為模擬</div></div></div>', unsafe_allow_html=True)
 
-            st.session_state.analysis = text
-
-            st.session_state.title = extract_section(
-                text,
-                "[A]",
-                "[B]"
-            ) or local_title()
-
-            st.session_state.description = extract_section(
-                text,
-                "[B]",
-                "[C]"
-            ) or local_description()
-
-            st.session_state.keywords = extract_section(
-                text,
-                "[C]",
-                "[D]"
-            ) or local_keywords()
-
-            st.session_state.selling_point_result = extract_section(
-                text,
-                "[D]",
-                "[E]"
-            ) or st.session_state.selling_points
-
-            st.session_state.tiktok = extract_section(
-                text,
-                "[E]",
-                "[F]"
-            ) or local_tiktok()
-
-            st.session_state.tiktok_script = extract_section(
-                text,
-                "[F]",
-                "[G]"
-            ) or local_tiktok_script()
-
-            st.session_state.jimeng = extract_section(
-                text,
-                "[G]",
-                None
-            ) or local_jimeng()
-
+def workspace():
+    workflow_header()
+    left, middle, right = st.columns([1.05, 1.25, 1.2])
+    with left:
+        st.markdown('<div class="card"><b>① 商品資訊輸入</b>', unsafe_allow_html=True)
+        name = st.text_input("商品名稱", value=st.session_state.product_name, placeholder="例如：玻尿酸保濕精華液 30ml")
+        category = st.selectbox("商品分類", ["保養保健", "美妝保養", "3C 電子", "居家生活", "服飾鞋包", "食品飲料", "汽機車", "其他"], index=0)
+        price = st.number_input("商品價格", min_value=0, value=int(st.session_state.price), step=10)
+        stock = st.number_input("商品庫存", min_value=0, value=int(st.session_state.stock), step=1)
+        condition = st.radio("商品狀態", ["全新", "二手"], horizontal=True)
+        points = st.text_area("商品賣點", value=st.session_state.selling_points, placeholder="例如：深層保濕、修護、溫和", height=90)
+        files = st.file_uploader("上傳商品圖片（可多張）", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True)
+        if files:
+            st.session_state.images = files
+            st.success(f"已選擇 {len(files)} 張圖片")
+        if st.button("🚀 執行 AI 工作流", use_container_width=True):
+            st.session_state.product_name = name
+            st.session_state.category = category
+            st.session_state.price = price
+            st.session_state.stock = stock
+            st.session_state.condition = condition
+            st.session_state.selling_points = points
             st.session_state.generated = True
+            save_history("執行 AI 工作流")
+            st.success("工作流完成，內容已產生")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with middle:
+        st.markdown('<div class="card"><b>② AI 分析結果</b>', unsafe_allow_html=True)
+        tabs = st.tabs(["商品分析", "標題建議", "關鍵字", "賣點"])
+        with tabs[0]:
+            if st.session_state.images:
+                try:
+                    img = Image.open(st.session_state.images[0])
+                    st.image(img, use_container_width=True)
+                except Exception:
+                    st.warning("圖片無法讀取")
+            else:
+                st.info("尚未上傳商品圖片")
+            st.write(f"商品：{current_name()}")
+            st.write("目前為離線展示模式；未連接 Gemini，因此不會虛構真正的圖片分析結果。")
+        with tabs[1]:
+            for i, text in enumerate([title_text(), f"{current_name()}｜保濕補水｜日常保養", f"高效修護 {current_name()}｜清爽好吸收"]):
+                st.checkbox(text, value=(i == 0), key=f"suggest_{i}")
+        with tabs[2]:
+            st.markdown("".join(f'<span class="tag">#{x}</span>' for x in keywords_text().split(",")), unsafe_allow_html=True)
+        with tabs[3]:
+            for x in ["深層保濕補水", "日常修護", "溫和好使用", "清爽不黏膩"]:
+                st.markdown(f'<div><span class="check">✓</span> {x}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with right:
+        st.markdown('<div class="card"><b>③ AI 內容生成</b>', unsafe_allow_html=True)
+        tabs = st.tabs(["商品標題", "商品描述", "關鍵字", "TikTok 文案", "即夢 Prompt"])
+        with tabs[0]:
+            st.text_area("標題", title_text(), height=120)
+        with tabs[1]:
+            st.text_area("描述", description_text(), height=200)
+        with tabs[2]:
+            st.text_area("關鍵字", keywords_text(), height=90)
+        with tabs[3]:
+            st.text_area("TikTok", tiktok_text(), height=170)
+        with tabs[4]:
+            st.text_area("即夢 AI 2.5 Prompt", jimeng_prompt(), height=260)
+        st.markdown('</div>', unsafe_allow_html=True)
+    bottom1, bottom2, bottom3 = st.columns([1, 1.2, 1])
+    with bottom1:
+        st.markdown('<div class="card"><b>④ 蝦皮上架設定</b>', unsafe_allow_html=True)
+        st.selectbox("物流", ["蝦皮店到店", "7-11 店到店", "全家店到店", "賣家宅配"])
+        st.selectbox("出貨地", ["台灣・新北市", "台灣・台北市", "台灣・桃園市"])
+        st.text_input("商品規格", "30ml")
+        st.number_input("上架庫存", min_value=0, value=int(st.session_state.stock))
+        st.selectbox("出貨天數", ["1 天內出貨", "2 天內出貨", "3 天內出貨", "7 天內出貨"])
+        st.toggle("自動回覆買家問題", True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with bottom2:
+        st.markdown('<div class="card"><b>⑤ 蝦皮上架預覽</b>', unsafe_allow_html=True)
+        if st.session_state.images:
+            try:
+                st.image(Image.open(st.session_state.images[0]), use_container_width=True)
+            except Exception:
+                st.info("圖片預覽失敗")
+        else:
+            st.info("尚未上傳商品圖片")
+        st.markdown(f'<div style="background:#fff;color:#222;padding:12px;border-radius:9px"><b>{current_name()}</b><div style="color:#ee4d2d;font-size:25px;font-weight:800">NT${st.session_state.price}</div><small>⭐⭐⭐⭐⭐　預覽資料</small></div>', unsafe_allow_html=True)
+        if st.button("🚀 一鍵上架蝦皮（模擬）", use_container_width=True):
+            st.session_state.published += 1
+            save_history("一鍵上架模擬")
+            st.success("模擬上架完成；尚未連接蝦皮官方 API，不會真的發布商品。")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with bottom3:
+        st.markdown(f'<div class="card"><b>系統狀態</b><h2>🟢 正常</h2>AI：離線展示模式<br>圖片：{len(st.session_state.images)} 張<br>模擬上架：{st.session_state.published} 次<br>版本：{APP_VERSION}</div>', unsafe_allow_html=True)
 
-            return True, "Gemini 已完成 AI 商品內容生成"
+# -------------------- generic pages --------------------
+def generic_page(page):
+    info = {
+        "商品管理": ("📦", "管理商品資料與上架狀態"),
+        "訂單管理": ("🧾", "管理訂單與出貨流程"),
+        "數據分析": ("📊", "查看銷售與使用數據"),
+        "AI 素材庫": ("🖼️", "管理圖片、影片與 Prompt"),
+        "歷史紀錄": ("🕘", "查看操作歷史"),
+        "TikTok 短影音": ("🎵", "建立 9:16 短影音內容"),
+        "蝦皮分潤管理": ("💰", "查看分潤資料"),
+        "會員管理": ("👤", "管理會員帳號與期限"),
+        "管理員中心": ("🛡️", "管理系統權限"),
+        "系統設定": ("⚙️", "系統功能設定"),
+        "API 設定": ("🔑", "AI 與蝦皮 API 設定"),
+        "使用教學": ("📚", "操作說明"),
+    }
+    icon, desc = info.get(page, ("⚙️", "系統功能"))
+    st.markdown(f'<div class="card"><div style="font-size:28px">{icon}</div><div class="title">{page}</div><div class="sub">{desc}</div></div>', unsafe_allow_html=True)
+    if page == "商品管理":
+        st.dataframe({"商品":["玻尿酸保濕精華液","修護面膜","保濕乳液"],"價格":[499,299,399],"庫存":[100,250,88],"狀態":["上架中","上架中","草稿"]}, use_container_width=True, hide_index=True)
+    elif page == "訂單管理":
+        st.info("目前為介面展示版，尚未連接蝦皮訂單 API。")
+    elif page == "數據分析":
+        a,b,c=st.columns(3)
+        a.metric("今日銷售額","NT$28,560","+25%")
+        b.metric("今日訂單","58","+15%")
+        c.metric("瀏覽人次","5,689","+22%")
+        st.line_chart({"銷售額":[18000,21000,19500,26000,24500,28000,28560]})
+    elif page == "AI 素材庫":
+        st.info("素材庫介面已建立；目前資料只保存在本次 Streamlit 工作階段。")
+    elif page == "歷史紀錄":
+        if st.session_state.history:
+            st.dataframe(st.session_state.history, use_container_width=True, hide_index=True)
+        else:
+            st.info("尚無歷史紀錄。")
+    elif page == "TikTok 短影音":
+        st.text_area("9:16 短影音腳本", tiktok_text(), height=180)
+        st.text_area("即夢 AI 2.5 Prompt", jimeng_prompt(), height=230)
+        st.info("目前只生成文字 Prompt，尚未連接影片生成服務。")
+    elif page == "蝦皮分潤管理":
+        st.metric("本月分潤","NT$12,580","+18%")
+    elif page == "會員管理":
+        st.info("會員管理介面已建立。正式登入與永久會員資料庫可在下一階段接入。")
+    elif page == "管理員中心":
+        st.warning("目前為展示介面，正式管理員驗證尚未連接資料庫。")
+    elif page == "系統設定":
+        st.toggle("啟用 AI 自動分析", True)
+        st.toggle("自動保存歷史紀錄", True)
+        st.toggle("深色科技介面", True)
+    elif page == "API 設定":
+        st.info("不填 API Key 也可以正常啟動本版本。")
+        st.text_input("Gemini API Key", type="password")
+        st.text_input("Shopee API Key", type="password")
+    elif page == "使用教學":
+        st.markdown("""### 使用流程\n1. 輸入商品名稱、分類、價格、庫存。\n2. 上傳一張或多張商品圖片。\n3. 執行 AI 工作流。\n4. 檢查標題、描述、關鍵字、TikTok 文案與即夢 Prompt。\n5. 使用蝦皮預覽確認資料。\n6. 目前一鍵上架為**模擬功能**，尚未真的連接蝦皮。""")
 
-        # API 失敗時，不讓 App 黑屏
-        # 自動切換本地模式
+# -------------------- run --------------------
+sidebar()
+header()
 
-        st.session_state.title = local_title()
-        st.session_state.description = local_description()
-        st.session_state.keywords = local_keywords()
-        st.session_state.selling_point_result = (
-            st.session_state.selling_points
-            or "請依實際商品資訊確認。"
-        )
-        st.session_state.tiktok = local_tiktok()
-        st.session_state.tiktok_script = local_tiktok_script()
-        st.session_state.jimeng = local_jimeng()
-        st.session_state.generated = True
+if st.session_state.page == "Dashboard":
+    dashboard()
+elif st.session_state.page == "商品上架工作台":
+    metrics()
+    workspace()
+else:
+    generic_page(st.session_state.page)
 
-        return False, (
-            "Gemini API 暫時無法使用，"
-            "已自動使用離線內容生成。"
-            "\n\n"
-            + result.get("error", "")
-        )
-
-    # --------------------------------------------------------
-    # 無 API Key
-    # --------------------------------------------------------
-
-    st.session_state.analysis = (
-        "目前未設定 Gemini API Key。\n\n"
-        "系統已切換至離線展示模式。"
-    )
-
-    st.session_state.title = local_title()
-    st.session_state.description = local_description()
-    st.session_state.keywords = local_keywords()
-    st.session_state.selling_point_result = (
-        st.session_state.selling_points
-        or "請依實際商品資訊確認。"
-    )
-    st.session_state.tiktok = local_tiktok()
-    st.session_state.tiktok_script = local_tiktok_script()
-    st.session_state.jimeng = local_jimeng()
-    st.session_state.generated = True
-
-    return False, "沒有 Gemini API Key，已使用離線模式"
-
-
-# ============================================================
-# 解析 Gemini 區塊
-# ============================================================
-
-def extract_section(text, start, end):
-
-    if not text:
-        return ""
-
-    try:
-
-        start_index = text.find(start)
-
-        if start_index == -1:
-            return ""
-
-        start_index += len(start)
-
-        if end:
-
-            end_index = text.find(
-                end,
-                start_index
-            )
-
-            if end_index == -1:
-               
+st.markdown('<div style="text-align:center;color:#52606e;font-size:10px;padding:25px 0 10px">AI 蝦皮自動化 2.5 PRO ・ Streamlit Cloud Ready</div>', unsafe_allow_html=True)
