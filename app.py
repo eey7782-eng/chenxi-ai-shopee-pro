@@ -1,8 +1,10 @@
 import io
+import os
 from datetime import datetime
 
 import streamlit as st
 from PIL import Image
+import google.generativeai as genai
 
 APP_NAME = "AI 蝦皮自動化"
 APP_VERSION = "2.5 PRO"
@@ -48,6 +50,12 @@ def init_state():
         "generated": False,
         "published": 0,
         "history": [],
+        # AI 生成結果儲存
+        "ai_title": "",
+        "ai_desc": "",
+        "ai_keywords": "",
+        "ai_tiktok": "",
+        "ai_jimeng": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -56,30 +64,78 @@ def init_state():
 init_state()
 
 # -------------------- helpers --------------------
-def current_name():
-    return st.session_state.product_name.strip() or "玻尿酸保濕精華液"
-
-def title_text():
-    return f"{current_name()}｜深層保濕修護｜日常補水保養"
-
-def description_text():
-    return f"""{current_name()}\n\n✨ 商品特色\n✓ 深層保濕補水\n✓ 修護日常保養\n✓ 溫和好使用\n✓ 清爽不黏膩\n\n實際商品資訊請以商品包裝及賣場資訊為準。"""
-
-def keywords_text():
-    return "保濕,補水,修護,保養,美容,肌膚,日常保養"
-
-def tiktok_text():
-    return f"""🔥 {current_name()}\n\n乾燥、缺水怎麼辦？\n用簡單的日常保養方式，維持水嫩感。\n\n✨ 商品特色展示\n🛒 想了解更多商品資訊，立即查看賣場！"""
-
-def jimeng_prompt():
-    return f"""9:16 vertical premium commercial product video.\n\nMain subject: {current_name()}\n\nUse the uploaded product image as the ONLY visual source for the product. Preserve original product shape, packaging, logo, label, colors, materials and visible text.\n\nCamera: slow cinematic push-in, subtle orbit movement, premium commercial lighting, clean luxury background.\n\nDo not redesign the product. Do not invent logos. Do not change packaging. Do not add fake text."""
+def get_api_key():
+    return st.secrets.get("GEMINI_API_KEY", "")
 
 def save_history(action):
     st.session_state.history.insert(0, {
         "時間": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "商品": current_name(),
+        "商品": st.session_state.product_name or "未命名商品",
         "操作": action,
     })
+
+def generate_all_ai_content(name, category, price, points, uploaded_files):
+    api_key = get_api_key()
+    if not api_key:
+        st.error("❌ 找不到 Secrets API Key，請先設定 GEMINI_API_KEY！")
+        return False
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-2.5-flash')
+
+    prompt = f"""
+你是一位頂級蝦皮電商爆款專家與短影音導演。請根據以下商品資料，一次性生成完整的行銷與上架資料：
+
+【商品名稱】：{name}
+【商品分類】：{category}
+【商品價格】：NT${price}
+【特色賣點】：{points}
+
+請完全照以下格式輸出（不要多加其他無關文字）：
+
+===TITLE===
+(請給出一個寫滿熱門搜尋關鍵字、吸引人的蝦皮商品標題，約 30-50 字)
+
+===DESC===
+(請給出條理分明、包含特色賣點、規格與溫馨提示的完整蝦皮商品描述)
+
+===KEYWORDS===
+(請給出 8-10 個用逗號分隔的精準搜尋關鍵字)
+
+===TIKTOK===
+(請給出適合 TikTok/Reels 的 30 秒帶貨短影音腳本，包含鏡頭畫面、旁白文案與強烈 CTA)
+
+===JIMENG===
+(請給出用於生成 9:16 商業產品影片的英文 AI 提示詞 Prompt，描述高品質光線、鏡頭動態與細節)
+"""
+
+    try:
+        content_parts = [prompt]
+        if uploaded_files:
+            for file in uploaded_files:
+                img = Image.open(file)
+                content_parts.append(img)
+
+        response = model.generate_content(content_parts)
+        text = response.text
+
+        # 解析結果
+        title = text.split("===TITLE===")[1].split("===DESC===")[0].strip() if "===TITLE===" in text else ""
+        desc = text.split("===DESC===")[1].split("===KEYWORDS===")[0].strip() if "===DESC===" in text else ""
+        keywords = text.split("===KEYWORDS===")[1].split("===TIKTOK===")[0].strip() if "===KEYWORDS===" in text else ""
+        tiktok = text.split("===TIKTOK===")[1].split("===JIMENG===")[0].strip() if "===TIKTOK===" in text else ""
+        jimeng = text.split("===JIMENG===")[1].strip() if "===JIMENG===" in text else ""
+
+        st.session_state.ai_title = title
+        st.session_state.ai_desc = desc
+        st.session_state.ai_keywords = keywords
+        st.session_state.ai_tiktok = tiktok
+        st.session_state.ai_jimeng = jimeng
+        st.session_state.generated = True
+        return True
+    except Exception as e:
+        st.error(f"AI 生成過程失敗：{e}")
+        return False
 
 # -------------------- sidebar --------------------
 def sidebar():
@@ -95,63 +151,93 @@ def sidebar():
                 st.session_state.page = name
                 st.rerun()
         st.markdown("---")
-        for icon, name in [("👤", "會員管理"), ("🛡️", "管理員中心"), ("⚙️", "系統設定"), ("🔑", "API 設定"), ("📚", "使用教學")]:
-            if st.button(f"{icon}  {name}", key=f"sys_{name}", use_container_width=True):
-                st.session_state.page = name
-                st.rerun()
-        st.markdown('<div class="card"><b style="color:#ff8a3d">👑 PRO 會員</b><br><span class="check">✓</span> AI 內容生成<br><span class="check">✓</span> 商品圖片分析介面<br><span class="check">✓</span> TikTok 9:16<br><span class="check">✓</span> 即夢 Prompt<br><span class="check">✓</span> 歷史紀錄</div>', unsafe_allow_html=True)
+        if get_api_key():
+            st.success("✅ Secrets API Key 已自動載入")
+        else:
+            st.error("⚠️ 未偵測到 Secrets Key")
 
 # -------------------- header / metrics --------------------
 def header():
-    st.markdown('<div class="card"><div class="title">🛍️ AI 蝦皮自動化 <span class="badge">2.5 PRO</span></div><div class="sub">AI 智能生成・商品工作流・蝦皮上架準備</div></div>', unsafe_allow_html=True)
-
-def metrics():
-    cols = st.columns(4)
-    values = [("今日 AI 使用額度", "86 / 200 次", "orange"), ("AI 剩餘額度", "1,248 Tokens", "green"), ("會員等級", "PRO 會員", "purple"), ("會員期限", "永久會員", "blue")]
-    for col, (label, value, cls) in zip(cols, values):
-        with col:
-            st.markdown(f'<div class="metric"><div class="metric-label">{label}</div><div class="metric-value {cls}">{value}</div></div>', unsafe_allow_html=True)
-
-# -------------------- dashboard --------------------
-def dashboard():
-    st.markdown('<div class="section">📊 Dashboard 總覽</div>', unsafe_allow_html=True)
-    cols = st.columns(4)
-    for col, icon, label, value, delta in zip(cols, ["🛍️", "👁️", "🛒", "💰"], ["今日上架商品", "商品瀏覽數", "成交訂單", "銷售額"], ["12", "5,689", "58", "NT$28,560"], ["+3", "+22%", "+15%", "+25%"]):
-        with col:
-            st.markdown(f'<div class="metric"><div style="font-size:23px">{icon}</div><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="green">{delta}</div></div>', unsafe_allow_html=True)
-    st.markdown('<div class="section">🚀 AI 自動化流程</div>', unsafe_allow_html=True)
-    st.markdown('<div class="workflow">' + '<div class="step"><div class="step-icon">📝</div><div class="step-title">商品輸入</div><div class="step-desc">資料與圖片</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🧠</div><div class="step-title">AI 分析</div><div class="step-desc">分析商品</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">✨</div><div class="step-title">內容生成</div><div class="step-desc">標題與文案</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">⚙️</div><div class="step-title">上架設定</div><div class="step-desc">價格與庫存</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🚀</div><div class="step-title">一鍵上架</div><div class="step-desc">目前為模擬</div></div></div>', unsafe_allow_html=True)
-    a, b = st.columns([2, 1])
-    with a:
-        st.markdown('<div class="card"><b>📈 最近銷售</b></div>', unsafe_allow_html=True)
-        st.line_chart({"銷售額": [18000, 21000, 19500, 26000, 24500, 28000, 28560]})
-    with b:
-        st.markdown('<div class="card"><b>🤖 AI 使用統計</b><h1 style="color:#ff6a00">24.96%</h1>本月使用量<br><br>文案生成：658 次<br>圖片分析：412 次<br>其他功能：178 次</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card"><div class="title">🛍️ AI 蝦皮自動化 <span class="badge">2.5 PRO 全自動一鍵生成版</span></div><div class="sub">AI 智能分析・全套文案、短影音與 Prompt 一鍵搞定</div></div>', unsafe_allow_html=True)
 
 # -------------------- workspace --------------------
-def workflow_header():
-    st.markdown('<div class="workflow"><div class="step"><div class="step-icon">📝</div><div class="step-title">商品資訊</div><div class="step-desc">輸入商品</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🧠</div><div class="step-title">AI 分析</div><div class="step-desc">分析圖片與資料</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">✨</div><div class="step-title">內容生成</div><div class="step-desc">文案與 Prompt</div></div><div class="arrow">→</div><div class="step"><div class="step-icon">🚀</div><div class="step-title">上架</div><div class="step-desc">目前為模擬</div></div></div>', unsafe_allow_html=True)
-
 def workspace():
-    workflow_header()
     left, middle, right = st.columns([1.05, 1.25, 1.2])
     with left:
-        st.markdown('<div class="card"><b>① 商品資訊輸入</b>', unsafe_allow_html=True)
-        name = st.text_input("商品名稱", value=st.session_state.product_name, placeholder="例如：玻尿酸保濕精華液 30ml")
-        category = st.selectbox("商品分類", ["保養保健", "美妝保養", "3C 電子", "居家生活", "服飾鞋包", "食品飲料", "汽機車", "其他"], index=0)
+        st.markdown('<div class="card"><b>① 輸入商品資訊</b>', unsafe_allow_html=True)
+        name = st.text_input("商品名稱", value=st.session_state.product_name, placeholder="例如：玻尿酸保濕精華液")
+        category = st.selectbox("商品分類", ["保養保健", "美妝保養", "3C 電子", "居家生活", "服飾鞋包", "食品飲料", "其他"], index=0)
         price = st.number_input("商品價格", min_value=0, value=int(st.session_state.price), step=10)
         stock = st.number_input("商品庫存", min_value=0, value=int(st.session_state.stock), step=1)
-        condition = st.radio("商品狀態", ["全新", "二手"], horizontal=True)
-        points = st.text_area("商品賣點", value=st.session_state.selling_points, placeholder="例如：深層保濕、修護、溫和", height=90)
-        files = st.file_uploader("上傳商品圖片（可多張）", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True)
+        points = st.text_area("商品賣點（可選）", value=st.session_state.selling_points, placeholder="例如：深層保濕、清爽不黏膩", height=80)
+        files = st.file_uploader("上傳商品圖片（可多張，AI 會進行視覺分析）", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True)
         if files:
             st.session_state.images = files
-            st.success(f"已選擇 {len(files)} 張圖片")
-        if st.button("🚀 執行 AI 工作流", use_container_width=True):
-            st.session_state.product_name = name
-            st.session_state.category = category
-            st.session_state.price = price
-            st.session_state.stock = stock
+
+        # ⚡⚡⚡ 一鍵生成全部核心按鈕 ⚡⚡⚡
+        if st.button("🚀 一鍵全自動生成（標題+描述+關鍵字+短影音+Prompt）", type="primary", use_container_width=True):
+            if not name and not files:
+                st.warning("請至少填寫商品名稱或上傳商品圖片！")
+            else:
+                with st.spinner("🤖 Gemini AI 正在深度分析商品並一次生成全套素材..."):
+                    st.session_state.product_name = name
+                    st.session_state.category = category
+                    st.session_state.price = price
+                    st.session_state.stock = stock
+                    st.session_state.selling_points = points
+                    
+                    if generate_all_ai_content(name, category, price, points, files):
+                        save_history("一鍵全自動生成")
+                        st.success("🎉 全套內容一鍵生成完成！")
+                        st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with middle:
+        st.markdown('<div class="card"><b>② AI 圖片與商品視覺分析</b>', unsafe_allow_html=True)
+        if st.session_state.images:
+            try:
+                img = Image.open(st.session_state.images[0])
+                st.image(img, use_container_width=True)
+            except Exception:
+                st.warning("圖片讀取失敗")
+        else:
+            st.info("💡 尚未上傳商品圖片（可直接使用文字生成）")
+        
+        if st.session_state.generated:
+            st.markdown("#### 🎯 關鍵字標籤")
+            tags = st.session_state.ai_keywords.replace("\n", "").split(",")
+            st.markdown("".join(f'<span class="tag">#{x.strip()}</span>' for x in tags if x.strip()), unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with right:
+        st.markdown('<div class="card"><b>③ 一鍵生成結果列表</b>', unsafe_allow_html=True)
+        tabs = st.tabs(["📌 商品標題", "📝 商品描述", "🏷️ 關鍵字", "🎵 TikTok 短影音", "🎬 即夢 AI Prompt"])
+        with tabs[0]:
+            st.text_area("生成的蝦皮標題", st.session_state.ai_title, height=120)
+        with tabs[1]:
+            st.text_area("生成的商品描述", st.session_state.ai_desc, height=220)
+        with tabs[2]:
+            st.text_area("關鍵字標籤", st.session_state.ai_keywords, height=100)
+        with tabs[3]:
+            st.text_area("TikTok/Reels 帶貨腳本", st.session_state.ai_tiktok, height=200)
+        with tabs[4]:
+            st.text_area("即夢 AI 2.5 影片 Prompt", st.session_state.ai_jimeng, height=220)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# -------------------- generic pages --------------------
+def generic_page(page):
+    st.markdown(f'<div class="card"><div class="title">{page}</div></div>', unsafe_allow_html=True)
+
+# -------------------- run --------------------
+sidebar()
+header()
+
+if st.session_state.page == "商品上架工作台":
+    workspace()
+else:
+    generic_page(st.session_state.page)
+
+st.markdown('<div style="text-align:center;color:#52606e;font-size:10px;padding:25px 0 10px">AI 蝦皮自動化 2.5 PRO ・ 全自動一鍵生成版</div>', unsafe_allow_html=True)ate.stock = stock
             st.session_state.condition = condition
             st.session_state.selling_points = points
             st.session_state.generated = True
