@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import json
 import base64
+import time
 
 st.set_page_config(page_title="蝦皮獨家爆款 AI 戰術系統", page_icon="🔥", layout="wide")
 
@@ -12,12 +13,12 @@ if not api_key:
     api_key = st.text_input("請貼上您的 Gemini API Key：", type="password")
 
 if api_key:
-    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (商品專屬動態生成)")
+    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (AI 影片生成版)")
     
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        product_name = st.text_input("商品名稱", "Acens")
+        product_name = st.text_input("商品名稱", "Acens 精華液")
         category = st.selectbox(
             "商品分類",
             ["美妝保養 / 個人護理", "3C 數碼 / 電腦周邊", "手機配件 / 各類周邊", "女裝 / 包包與服飾", "居家生活", "美食零食", "其他"]
@@ -27,31 +28,28 @@ if api_key:
         selling_points = st.text_area("本品獨家賣點", "極速吸收、專利控油成分、敏弱肌專用")
         uploaded_file = st.file_uploader("上傳商品圖片 (選填)", type=["jpg", "jpeg", "png"])
         
-        btn = st.button("🚀 生成獨家戰術行銷包 + 專屬動態商品圖", type="primary", use_container_width=True)
+        btn = st.button("🚀 生成獨家行銷包 + AI 影片", type="primary", use_container_width=True)
 
     with col2:
         if btn:
-            # 1. 生成文案與行銷組合
-            with st.spinner("1/2 AI 正在分析競品痛點並生成獨家戰術文案..."):
+            # 1. 生成文案與影片指令
+            with st.spinner("1/2 AI 正在分析競品痛點並生成文案..."):
                 try:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
                     
-                    prompt = f"""你是一位擅長「降維打擊」與「心智占領」的頂級電商行銷操盤手。
-請針對以下商品資訊，避開市面上常見的罐頭套路，產生一套極具差異化與殺傷力的蝦皮上架組合：
-
-【商品資訊】
+                    prompt = f"""你是一位頂級電商行銷操盤手。針對以下商品：
 - 名稱：{product_name}
 - 分類：{category}
 - 價格：NT$ {price}
 - 競品痛點：{competitor_flaw}
 - 本品賣點：{selling_points}
 
-請輸出以下 5 大獨家內容：
-1. 🥊 高轉化「降維打擊」蝦皮標題 (60字內)
-2. 🎯 五感沉浸式商品描述 (包含：【競品避坑指南】、【痛點解決】、【實測體驗】)
+請輸出：
+1. 🥊 高轉化蝦皮標題 (60字內)
+2. 🎯 五感沉浸式商品描述
 3. 📈 蝦皮搜尋演算法關鍵字矩陣
-4. 🎬 TikTok / Shopee 衝動購物型 15秒黃金前3秒短影音分鏡
-5. 🎨 專用英文影片生成 Prompt (請精簡為 20 字以內的英文關鍵字，專門用於商業攝影)
+4. 🎬 短影音分鏡腳本
+5. 🎨 一句簡短英文影片生成 Prompt (例如：Commercial macro shot of liquid drop on luxury skincare bottle, 4k, studio light)
 """
                     parts = [{"text": prompt}]
                     
@@ -78,14 +76,26 @@ if api_key:
                 except Exception as e:
                     st.error(f"執行出錯：{str(e)}")
 
-            # 2. 根據商品即時生成專屬高清商業動態視覺
-            with st.spinner("2/2 正在為您的商品即時渲染專屬視覺..."):
+            # 2. 呼叫 AI 影片模型，現場渲染並下載影片
+            st.divider()
+            st.subheader("🎥 6. AI 現場運算商品動態影片")
+            with st.spinner("2/2 AI 影片模型正在運算渲染中（免費伺服器生成影片約需要 20~40 秒，請稍候）..."):
                 try:
-                    image_prompt = f"commercial product shot of {product_name}, luxury studio lighting, high resolution, 4k"
-                    img_url = f"https://pollinations.ai/p/{image_prompt.replace(' ', '%20')}?width=800&height=450&seed=42&model=flux"
+                    # 使用 Hugging Face Text-to-Video 開源模型 API
+                    hf_api_url = "https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7m"
+                    video_prompt = f"commercial advertisement video of {product_name}, luxury lighting, liquid movement, 4k high quality"
                     
-                    st.divider()
-                    st.subheader("🖼️ 6. 本商品專屬 AI 商業行銷視覺")
-                    st.image(img_url, caption=f"✨ 為 {product_name} 即時算出的專屬商業展示圖 (可在平板長按儲存)")
+                    video_res = requests.post(
+                        hf_api_url, 
+                        json={"inputs": video_prompt},
+                        timeout=120
+                    )
+                    
+                    if video_res.status_code == 200 and len(video_res.content) > 1000:
+                        st.success("🎉 AI 影片生成完畢！")
+                        st.video(video_res.content)
+                        st.caption("💡 影片已成功生成！您可以在平板上點擊右下角三個點下載，或是長按影片儲存。")
+                    else:
+                        st.warning("⚠️ 免費影片模型伺服器目前排隊人數較多。若未順利顯示，請等待 10 秒後再點擊一次生成按鈕。")
                 except Exception as e:
-                    st.info("💡 視覺渲染連線超時，文案已為您完整生成。")
+                    st.info("💡 影片模型運算逾時，文案已為您完整生成。")
