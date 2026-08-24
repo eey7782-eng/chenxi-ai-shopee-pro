@@ -23,9 +23,8 @@ section[data-testid="stSidebar"]{background:linear-gradient(180deg,#0a1018,#070b
 .card{background:linear-gradient(145deg,#101923,#090f17);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;margin-bottom:14px}
 .title{font-size:24px;font-weight:800}.sub{color:#8995a4;font-size:12px}
 .section{font-size:17px;font-weight:800;margin:10px 0}
-.# -------------------- Gemini API 邏輯 --------------------
+.# -------------------- Gemini API --------------------
 def get_effective_api_key():
-    """優先讀取 UI 設定，次之讀取 Streamlit Secrets"""
     if st.session_state.get("gemini_api_key"):
         return st.session_state["gemini_api_key"]
     try:
@@ -34,7 +33,6 @@ def get_effective_api_key():
         return ""
 
 def call_gemini_api(prompt_text, image_file=None):
-    """呼叫 Gemini 2.5 Flash 生成內容"""
     api_key = get_effective_api_key()
     if not api_key:
         st.error("❌ 未檢測到有效的 Gemini API Key！請至 Secrets 或 [API 設定] 填寫。")
@@ -53,6 +51,7 @@ def call_gemini_api(prompt_text, image_file=None):
         return response.text
     except Exception as e:
         st.error(f"❌ API 呼叫失敗：{str(e)}")
+        return None
         return None
             img = Image.open(image_file)
             contents.append(img)
