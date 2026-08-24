@@ -48,7 +48,8 @@ if api_key:
         if btn:
             with st.spinner("AI 正在為您生成文案、影片腳本與繪圖指令..."):
                 try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                    # 使用 2026 最新 gemini-2.5-flash 模型修正 404 錯誤
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
                     
                     prompt = f"""你是一位頂級蝦皮電商與短影音行銷專家。針對以下商品資訊，請一次產生以下 5 項完整內容：
 
@@ -98,7 +99,7 @@ if api_key:
                         result_text = data["candidates"][0]["content"]["parts"][0]["text"]
                         st.success("✨ 全套行銷內容生成成功！")
                         
-                        # 程式碼區塊提供平板一鍵複製按鈕
+                        # 程式碼區塊右上方提供一鍵複製按鈕
                         st.code(result_text, language="markdown")
                     else:
                         st.error(f"API 錯誤：{res.text}")
