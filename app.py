@@ -3,9 +3,9 @@ import requests
 import json
 import base64
 
-st.set_page_config(page_title="AI 蝦皮自動化", page_icon="🛍️", layout="wide")
+st.set_page_config(page_title="AI 蝦皮自動化全套生成", page_icon="🛍️", layout="wide")
 
-# 優先讀取 Secrets 中的 Key
+# 優先讀取 Secrets 裡的 API Key
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 if not api_key:
@@ -13,26 +13,71 @@ if not api_key:
     api_key = st.text_input("請貼上您的 Gemini API Key：", type="password")
 
 if api_key:
-    st.title("🛍️ AI 蝦皮自動化生成工具")
+    st.title("🛍️ AI 蝦皮自動化全套生成工具")
     
     col1, col2 = st.columns([1, 1])
     
     with col1:
         product_name = st.text_input("商品名稱", "玻尿酸精華液")
-        category = st.text_input("商品分類", "美妝保養")
+        
+        category = st.selectbox(
+            "商品分類",
+            [
+                "美妝保養 / 個人護理",
+                "3C 數碼 / 電腦周邊",
+                "手機配件 / 各類周邊",
+                "女裝 / 女性包包與服飾",
+                "男裝 / 男性包包與服飾",
+                "居家生活 / 家居用品",
+                "美食 / 生鮮零食",
+                "母嬰用品 / 玩具童裝",
+                "運動 / 戶外休閒",
+                "寵物用品",
+                "汽機車零件周邊",
+                "其他分類"
+            ]
+        )
+        
         price = st.number_input("商品價格 (NT$)", value=499)
-        selling_points = st.text_area("商品賣點", "強效保濕、清爽不黏膩")
+        selling_points = st.text_area("商品賣點", "強效保濕、清爽不黏膩、敏弱肌適用")
         uploaded_file = st.file_uploader("上傳商品圖片 (選填)", type=["jpg", "jpeg", "png"])
         
-        btn = st.button("⚡ 執行 AI 一鍵生成", type="primary", use_container_width=True)
+        btn = st.button("⚡ 執行 AI 全套生成", type="primary", use_container_width=True)
 
     with col2:
         if btn:
-            with st.spinner("AI 正在生成中..."):
+            with st.spinner("AI 正在為您生成文案、影片腳本與繪圖指令..."):
                 try:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
                     
-                    prompt = f"針對商品：{product_name}，分類：{category}，價格：{price}，賣點：{selling_points}。請生成：1.爆款標題 2.商品描述 3.熱搜標籤"
+                    prompt = f"""你是一位頂級蝦皮電商與短影音行銷專家。針對以下商品資訊，請一次產生以下 5 項完整內容：
+
+【商品資訊】
+- 名稱：{product_name}
+- 分類：{category}
+- 價格：NT$ {price}
+- 賣點：{selling_points}
+
+---
+### 1. 蝦皮爆款標題
+（含熱搜詞與 Emoji，60字以內）
+
+---
+### 2. 蝦皮商品特色描述
+（包含產品亮點、使用情境、售後說明）
+
+---
+### 3. 熱搜關鍵字標籤
+（以 # 分隔的標籤組合）
+
+---
+### 4. TikTok / Shopee 15秒短影音腳本
+（包含：鏡頭畫面、畫面配詞、背景音樂建議）
+
+---
+### 5. 即夢 AI (Jimeng) 英文產品攝影 Prompt
+（專為 AI 繪圖生成商業產品照設計的英文 Prompt，包含光線、背景與細節描繪）
+"""
                     parts = [{"text": prompt}]
                     
                     if uploaded_file:
@@ -51,8 +96,10 @@ if api_key:
                     if res.status_code == 200:
                         data = res.json()
                         result_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                        st.success("✨ 生成成功！")
-                        st.markdown(result_text)
+                        st.success("✨ 全套行銷內容生成成功！")
+                        
+                        # 程式碼區塊提供平板一鍵複製按鈕
+                        st.code(result_text, language="markdown")
                     else:
                         st.error(f"API 錯誤：{res.text}")
                 except Exception as e:
