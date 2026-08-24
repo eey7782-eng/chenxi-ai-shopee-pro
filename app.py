@@ -1,6 +1,6 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+import requests
+import json
 import base64
 
 st.set_page_config(page_title="蝦皮獨家爆款 AI 戰術系統", page_icon="🔥", layout="wide")
@@ -12,7 +12,6 @@ if not api_key:
     api_key = st.text_input("請貼上您的 Gemini API Key：", type="password")
 
 if api_key:
-    client = genai.Client(api_key=api_key)
     st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (含影片生成模組)")
     
     col1, col2 = st.columns([1, 1])
@@ -34,6 +33,9 @@ if api_key:
         if btn:
             with st.spinner("AI 正在分析競品痛點並生成獨家戰術文案..."):
                 try:
+                    # 使用最新 gemini-3.6-flash 模型
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
+                    
                     prompt = f"""你是一位擅長「降維打擊」與「心智占領」的頂級電商行銷操盤手。
 請針對以下商品資訊，避開市面上常見的罐頭套路，產生一套極具差異化與殺傷力的蝦皮上架組合：
 
@@ -51,29 +53,34 @@ if api_key:
 4. 🎬 TikTok / Shopee 衝動購物型 15秒黃金前3秒短影音分鏡
 5. 🎨 專用英文影片生成 Prompt
 """
-                    contents = [prompt]
+                    parts = [{"text": prompt}]
+                    
                     if uploaded_file:
                         bytes_data = uploaded_file.getvalue()
-                        contents.append(
-                            types.Part.from_bytes(
-                                data=bytes_data,
-                                mime_type=uploaded_file.type,
-                            )
-                        )
+                        base64_image = base64.b64encode(bytes_data).decode("utf-8")
+                        parts.append({
+                            "inline_data": {
+                                "mime_type": uploaded_file.type,
+                                "data": base64_image
+                            }
+                        })
+                        
+                    payload = {"contents": [{"parts": parts}]}
+                    # 將 timeout 拉長至 90 秒，避免請求逾時
+                    res = requests.post(url, json=payload, timeout=90)
+                    
+                    if res.status_code == 200:
+                        data = res.json()
+                        result_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                        st.success("✨ 獨家戰術行銷包生成完成！")
+                        st.code(result_text, language="markdown")
 
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=contents,
-                    )
-
-                    st.success("✨ 獨家戰術行銷包生成完成！")
-                    st.code(response.text, language="markdown")
-
-                    st.divider()
-                    st.subheader("🎥 6. AI 商品短影音動態預覽")
-                    sample_video_url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-                    st.video(sample_video_url)
-                    st.caption("💡 上方為 AI 自動匹配之動態短影音預覽，您可直接長按影片下載或儲存至平板！")
-
+                        st.divider()
+                        st.subheader("🎥 6. AI 商品短影音動態預覽")
+                        sample_video_url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+                        st.video(sample_video_url)
+                        st.caption("💡 上方為 AI 自動匹配之動態短影音預覽，您可直接長按影片下載或儲存至平板！")
+                    else:
+                        st.error(f"API 錯誤：{res.text}")
                 except Exception as e:
                     st.error(f"執行出錯：{str(e)}")
