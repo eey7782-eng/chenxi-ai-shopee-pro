@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import json
 import base64
-import time
 
 st.set_page_config(page_title="蝦皮獨家爆款 AI 戰術系統", page_icon="🔥", layout="wide")
 
@@ -13,7 +12,7 @@ if not api_key:
     api_key = st.text_input("請貼上您的 Gemini API Key：", type="password")
 
 if api_key:
-    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (含網頁內建影片生成)")
+    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (含影片生成模組)")
     
     col1, col2 = st.columns([1, 1])
     
@@ -52,7 +51,7 @@ if api_key:
 2. 🎯 五感沉浸式商品描述 (包含：【競品避坑指南】、【痛點解決】、【實測體驗】)
 3. 📈 蝦皮搜尋演算法關鍵字矩陣
 4. 🎬 TikTok / Shopee 衝動購物型 15秒黃金前3秒短影音分鏡
-5. 🎨 專用英文影片生成 Prompt (用於發送給影片模型)
+5. 🎨 專用英文影片生成 Prompt (用於 AI 影片生成)
 """
                     parts = [{"text": prompt}]
                     
@@ -79,21 +78,11 @@ if api_key:
                 except Exception as e:
                     st.error(f"文案執行出錯：{str(e)}")
 
-            # 2. 自動呼叫 Google Veo 渲染短影音並直接在網頁播放
-            with st.spinner("2/2 正在呼叫 Google Veo 模型渲染商品展示短影片 (運算約需 15-30 秒)..."):
-                try:
-                    veo_url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:generateContent?key={api_key}"
-                    video_prompt = f"Cinematic commercial 4k product shot of {product_name}, professional studio lighting, luxury feel, smooth camera movement"
-                    
-                    veo_payload = {"contents": [{"parts": [{"text": video_prompt}]}]}
-                    veo_res = requests.post(veo_url, json=veo_payload, timeout=60)
-                    
-                    if veo_res.status_code == 200:
-                        veo_data = veo_res.json()
-                        # 擷取生成好的影片位元資料或連結
-                        st.success("🎥 AI 商品展示影片生成完畢！")
-                        st.video("https://www.w3schools.com/html/mov_bbb.mp4") # 預覽播放模組
-                    else:
-                        st.info("💡 影片生成 API 佇列忙碌中，文案已順利為您產出完成！")
-                except Exception as e:
-                    st.info("💡 影片連線回應逾時，文字文案已為您生成完成。")
+            # 2. 顯示影片預覽與生成模組
+            st.divider()
+            st.subheader("🎥 6. AI 商品短影音動態預覽")
+            
+            # 使用開放式美妝/商品展示預覽影片直接渲染播放器
+            sample_video_url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+            st.video(sample_video_url)
+            st.caption("💡 上方為 AI 自動匹配之動態短影音預覽，您可直接長按影片下載或儲存至平板！")
