@@ -1,16 +1,8 @@
-import io
-from datetime import datetime
-
+import base64
+import json
+import requests
 import streamlit as st
 from PIL import Image
-
-# 嘗試載入 Gemini SDK
-try:
-    from google import genai
-    USE_NEW_SDK = True
-except ImportError:
-    import google.generativeai as genai
-    USE_NEW_SDK = False
 
 APP_NAME = "AI 蝦皮自動化"
 APP_VERSION = "2.5 PRO"
@@ -29,7 +21,6 @@ st.markdown("""
 section[data-testid="stSidebar"]{background:linear-gradient(180deg,#0a1018,#070b11);border-right:1px solid rgba(255,255,255,.08)}
 .card{background:linear-gradient(145deg,#101923,#090f17);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;margin-bottom:14px}
 .title{font-size:24px;font-weight:800}.sub{color:#8995a4;font-size:12px}
-.section{font-size:17px;font-weight:800;margin:10px 0}
 .badge{display:inline-block;margin-left:8px;padding:3px 8px;border-radius:6px;font-size:11px;color:#ff9d52;border:1px solid #ff6a00;background:rgba(255,90,0,.1)}
 .stButton>button{border-radius:8px!important;background:#111a24!important;color:#fff!important;font-weight:700!important;border:1px solid rgba(255,255,255,.12)!important}
 .stButton>button:hover{border-color:#ff6a00!important;color:#ff8b42!important}
@@ -45,32 +36,54 @@ def get_effective_api_key():
     except Exception:
         return ""
 
-def call_gemini_api(prompt_text, image_file=None):
+def call_gemini_api_rest(prompt_text, image_file=None):
     api_key = get_effective_api_key()
     if not api_key:
         st.error("❌ 請先在左側選單「🔑 API 設定」中輸入您的 Gemini API Key！")
         return None
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    parts = [{"text": prompt_text}]
+    
+    if image_file:
+        try:
+            image_bytes = image_file.getvalue()
+            base64_image = base64.b64encode(image_bytes).decode('utf-8')
+            mime_type = image_file.type or "image/jpeg"
+            parts.append({
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": base64_image
+                }
+            })
+        except Exception as e:
+            st.error(f"❌ 圖片處理失敗：{str(e)}")
+            return None
+
+    payload = {
+        "contents": [{
+            "parts": parts
+        }]
+    }
+    
+    headers = {'Content-Type': 'application/json'}
+    
     try:
-        if USE_NEW_SDK:
-            client = genai.Client(api_key=api_key)
-            contents = [prompt_text]
-            if image_file:
-                contents.append(Image.open(image_file))
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=contents
-            )
-            return response.text
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+        res_data = response.json()
+        
+        if response.status_code == 200:
+            try:
+                return res_data['candidates'][0]['content']['parts'][0]['text']
+            except (KeyError, IndexErrors):
+                return "AI 未能順利回傳文字內容。"
         else:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            contents = [prompt_text]
-            if image_file:
-                contents.append(Image.open(image_file))
-            response = model.generate_content(contents)
-            return response.text
+            err_msg = res_data.get('error', {}).get('message', '未知錯誤')
+            st.error(f"❌ API 報錯 ({response.status_code})：{err_msg}")
+            return None
     except Exception as e:
-        st.error(f"❌ API 呼叫失敗：{str(e)}")
+        st.error(f"❌ 連線失敗：{str(e)}")
         return None
 
 def init_state():
@@ -129,7 +142,7 @@ if st.session_state.page == "商品上架工作台":
             with st.spinner("🚀 AI 產生中..."):
                 img_file = st.session_state.images[0] if st.session_state.images else None
                 prompt = f"請為商品「{current_name()}」（分類：{category}、價格：{price}、賣點：{points}）撰寫包含 Emoji 的爆款蝦皮標題、銷售描述、關鍵字、TikTok 短影音腳本與即夢 Prompt，並用『---』分隔。"
-                res = call_gemini_api(prompt, img_file)
+                res = call_gemini_api_rest(prompt, img_file)
                 if res:
                     parts = res.split("---")
                     st.session_state.ai_title = parts[0].strip() if len(parts) > 0 else f"🔥【熱銷】{current_name()}"
