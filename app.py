@@ -23,21 +23,11 @@ section[data-testid="stSidebar"]{background:linear-gradient(180deg,#0a1018,#070b
 .card{background:linear-gradient(145deg,#101923,#090f17);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;margin-bottom:14px}
 .title{font-size:24px;font-weight:800}.sub{color:#8995a4;font-size:12px}
 .section{font-size:17px;font-weight:800;margin:10px 0}
-.badge{display:inline-block;margin-left:8px;padding:3px 8px;border-radius:6px;font-size:11px;color:#ff9d52;border:1px solid #ff6a00;background:rgba(255,90,0,.1)}
-.metric{background:linear-gradient(145deg,#111a25,#0b1119);border:1px solid rgba(255,255,255,.07);border-radius:13px;padding:13px;min-height:80px}
-.metric-label{font-size:11px;color:#8995a4}.metric-value{font-size:21px;font-weight:800;margin-top:4px}.orange{color:#ff6a00}.green{color:#50d890}.blue{color:#4ab7ff}.purple{color:#b28cff}
-.workflow{display:flex;gap:8px;align-items:center;background:#0b121b;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px;margin-bottom:14px;overflow-x:auto}
-.step{min-width:130px;flex:1;background:#101923;border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:10px}.step-icon{font-size:22px}.step-title{font-size:13px;font-weight:800}.step-desc{font-size:10px;color:#7e8a99}.arrow{color:#ff6a00;font-size:20px;font-weight:bold}
-.check{color:#49d98c}.tag{display:inline-block;padding:5px 9px;margin:3px;background:#172331;border:1px solid #293a4b;border-radius:7px;color:#b8c5d2;font-size:11px}
-.stButton>button{border-radius:8px!important;background:#111a24!important;color:#fff!important;font-weight:700!important;border:1px solid rgba(255,255,255,.12)!important}
-.stButton>button:hover{border-color:#ff6a00!important;color:#ff8b42!important}
-.stTextInput input,.stNumberInput input,.stTextArea textarea,.stSelectbox div[data-baseweb="select"]>div{background:#0b121b!important;color:#fff!important;border-radius:8px!important}
-</style>
-""", unsafe_allow_html=True)
-
-# -------------------- Gemini API def call_gemini_api(prompt_text, image_file=None):
-    """呼叫 Gemini 2.5 Flash 生成內容"""
-    api_key = get_effective_api_key()
+.# -------------------- Gemini API 邏輯 --------------------
+def get_effective_api_key():
+    """優先讀取 UI 設定，次之讀取 Streamlit Secrets"""
+    if st.session_state.get("gemini_api_key"):
+        return st.session_state["gemini_api_key"]
     try:
         return st.secrets.get("GEMINI_API_KEY", "")
     except Exception:
@@ -53,6 +43,17 @@ def call_gemini_api(prompt_text, image_file=None):
         client = genai.Client(api_key=api_key)
         contents = [prompt_text]
         if image_file:
+            img = Image.open(image_file)
+            contents.append(img)
+            
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents
+        )
+        return response.text
+    except Exception as e:
+        st.error(f"❌ API 呼叫失敗：{str(e)}")
+        return None
             img = Image.open(image_file)
             contents.append(img)
             
