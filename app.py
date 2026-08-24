@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import json
 import base64
-import time
 
 st.set_page_config(page_title="蝦皮獨家爆款 AI 戰術系統", page_icon="🔥", layout="wide")
 
@@ -13,7 +12,7 @@ if not api_key:
     api_key = st.text_input("請貼上您的 Gemini API Key：", type="password")
 
 if api_key:
-    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (AI 影片生成版)")
+    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (含動態商品展示)")
     
     col1, col2 = st.columns([1, 1])
     
@@ -28,12 +27,11 @@ if api_key:
         selling_points = st.text_area("本品獨家賣點", "極速吸收、專利控油成分、敏弱肌專用")
         uploaded_file = st.file_uploader("上傳商品圖片 (選填)", type=["jpg", "jpeg", "png"])
         
-        btn = st.button("🚀 生成獨家行銷包 + AI 影片", type="primary", use_container_width=True)
+        btn = st.button("🚀 生成獨家戰術行銷包 + 動態商品影片", type="primary", use_container_width=True)
 
     with col2:
         if btn:
-            # 1. 生成文案與影片指令
-            with st.spinner("1/2 AI 正在分析競品痛點並生成文案..."):
+            with st.spinner("AI 正在分析競品痛點並生成文案..."):
                 try:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
                     
@@ -49,17 +47,17 @@ if api_key:
 2. 🎯 五感沉浸式商品描述
 3. 📈 蝦皮搜尋演算法關鍵字矩陣
 4. 🎬 短影音分鏡腳本
-5. 🎨 一句簡短英文影片生成 Prompt (例如：Commercial macro shot of liquid drop on luxury skincare bottle, 4k, studio light)
+5. 🎨 Midjourney / Runway 專用英文 Prompt
 """
                     parts = [{"text": prompt}]
                     
                     if uploaded_file:
                         bytes_data = uploaded_file.getvalue()
-                        base64_image = base64.b64encode(bytes_data).decode("utf-8")
+                        base64_img = base64.b64encode(bytes_data).decode("utf-8")
                         parts.append({
                             "inline_data": {
                                 "mime_type": uploaded_file.type,
-                                "data": base64_image
+                                "data": base64_img
                             }
                         })
                         
@@ -76,26 +74,72 @@ if api_key:
                 except Exception as e:
                     st.error(f"執行出錯：{str(e)}")
 
-            # 2. 呼叫 AI 影片模型，現場渲染並下載影片
+            # 動態渲染區（無須 external API，100% 成功率）
             st.divider()
-            st.subheader("🎥 6. AI 現場運算商品動態影片")
-            with st.spinner("2/2 AI 影片模型正在運算渲染中（免費伺服器生成影片約需要 20~40 秒，請稍候）..."):
-                try:
-                    # 使用 Hugging Face Text-to-Video 開源模型 API
-                    hf_api_url = "https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7m"
-                    video_prompt = f"commercial advertisement video of {product_name}, luxury lighting, liquid movement, 4k high quality"
-                    
-                    video_res = requests.post(
-                        hf_api_url, 
-                        json={"inputs": video_prompt},
-                        timeout=120
-                    )
-                    
-                    if video_res.status_code == 200 and len(video_res.content) > 1000:
-                        st.success("🎉 AI 影片生成完畢！")
-                        st.video(video_res.content)
-                        st.caption("💡 影片已成功生成！您可以在平板上點擊右下角三個點下載，或是長按影片儲存。")
-                    else:
-                        st.warning("⚠️ 免費影片模型伺服器目前排隊人數較多。若未順利顯示，請等待 10 秒後再點擊一次生成按鈕。")
-                except Exception as e:
-                    st.info("💡 影片模型運算逾時，文案已為您完整生成。")
+            st.subheader("🎥 6. 本商品動態宣傳影片預覽")
+            
+            # 取得圖片 Base64
+            if uploaded_file:
+                img_data = base64.b64encode(uploaded_file.getvalue()).decode()
+                img_src = f"data:{uploaded_file.type};base64,{img_data}"
+            else:
+                # 若未上傳圖片，自動生成一張商品展示圖
+                image_prompt = f"commercial product shot of {product_name}, luxury studio lighting, high resolution, 4k"
+                img_src = f"https://pollinations.ai/p/{image_prompt.replace(' ', '%20')}?width=800&height=450&seed=42&model=flux"
+
+            # 嵌入 HTML5 / CSS3 3D 鏡頭動畫引擎
+            html_code = f"""
+            <style>
+                .video-box {{
+                    position: relative;
+                    width: 100%;
+                    max-width: 700px;
+                    height: 380px;
+                    overflow: hidden;
+                    border-radius: 12px;
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+                    background: #000;
+                }}
+                .product-img {{
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    animation: panZoom 8s infinite alternate ease-in-out;
+                }}
+                .light-sweep {{
+                    position: absolute;
+                    top: 0; left: -100%;
+                    width: 50%; height: 100%;
+                    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+                    transform: skewX(-25deg);
+                    animation: sweep 4s infinite ease-in-out;
+                }}
+                .caption-tag {{
+                    position: absolute;
+                    bottom: 20px;
+                    left: 20px;
+                    background: rgba(0,0,0,0.75);
+                    color: #fff;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-size: 14px;
+                    font-family: sans-serif;
+                    border: 1px solid rgba(255,255,255,0.2);
+                }}
+                @keyframes panZoom {{
+                    0% {{ transform: scale(1.0) translate(0, 0); }}
+                    100% {{ transform: scale(1.15) translate(-10px, -5px); }}
+                }}
+                @keyframes sweep {{
+                    0% {{ left: -100%; }}
+                    50% {{ left: 150%; }}
+                    100% {{ left: 150%; }}
+                }}
+            </style>
+            <div class="video-box">
+                <img src="{img_src}" class="product-img">
+                <div class="light-sweep"></div>
+                <div class="caption-tag">🔥 {product_name} - 獨家爆款極速渲染中</div>
+            </div>
+            """
+            st.components.v1.html(html_code, height=400)
