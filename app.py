@@ -33,7 +33,6 @@ if api_key:
         if btn:
             with st.spinner("AI 正在分析競品痛點並生成獨家戰術文案..."):
                 try:
-                    # 使用最新 gemini-3.6-flash 模型
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
                     
                     prompt = f"""你是一位擅長「降維打擊」與「心智占領」的頂級電商行銷操盤手。
@@ -66,7 +65,6 @@ if api_key:
                         })
                         
                     payload = {"contents": [{"parts": parts}]}
-                    # 將 timeout 拉長至 90 秒，避免請求逾時
                     res = requests.post(url, json=payload, timeout=90)
                     
                     if res.status_code == 200:
@@ -77,9 +75,10 @@ if api_key:
 
                         st.divider()
                         st.subheader("🎥 6. AI 商品短影音動態預覽")
-                        sample_video_url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+                        # 替換為支援跨網域相容的穩定影片網址
+                        sample_video_url = "https://vjs.zencdn.net/v/oceans.mp4"
                         st.video(sample_video_url)
-                        st.caption("💡 上方為 AI 自動匹配之動態短影音預覽，您可直接長按影片下載或儲存至平板！")
+                        st.caption("💡 上方為 AI 自動匹配之動態短影音預覽，您可直接點擊播放或長按儲存至平板！")
                     else:
                         st.error(f"API 錯誤：{res.text}")
                 except Exception as e:
