@@ -1,6 +1,6 @@
 import streamlit as st
-import requests
-import json
+from google import genai
+from google.genai import types
 import base64
 
 st.set_page_config(page_title="蝦皮獨家爆款 AI 戰術系統", page_icon="🔥", layout="wide")
@@ -12,6 +12,7 @@ if not api_key:
     api_key = st.text_input("請貼上您的 Gemini API Key：", type="password")
 
 if api_key:
+    client = genai.Client(api_key=api_key)
     st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (含影片生成模組)")
     
     col1, col2 = st.columns([1, 1])
@@ -31,11 +32,8 @@ if api_key:
 
     with col2:
         if btn:
-            # 1. 生成文案與行銷組合
-            with st.spinner("1/2 AI 正在分析競品痛點並生成獨家戰術文案..."):
+            with st.spinner("AI 正在分析競品痛點並生成獨家戰術文案..."):
                 try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
-                    
                     prompt = f"""你是一位擅長「降維打擊」與「心智占領」的頂級電商行銷操盤手。
 請針對以下商品資訊，避開市面上常見的罐頭套路，產生一套極具差異化與殺傷力的蝦皮上架組合：
 
@@ -51,38 +49,31 @@ if api_key:
 2. 🎯 五感沉浸式商品描述 (包含：【競品避坑指南】、【痛點解決】、【實測體驗】)
 3. 📈 蝦皮搜尋演算法關鍵字矩陣
 4. 🎬 TikTok / Shopee 衝動購物型 15秒黃金前3秒短影音分鏡
-5. 🎨 專用英文影片生成 Prompt (用於 AI 影片生成)
+5. 🎨 專用英文影片生成 Prompt
 """
-                    parts = [{"text": prompt}]
-                    
+                    contents = [prompt]
                     if uploaded_file:
                         bytes_data = uploaded_file.getvalue()
-                        base64_image = base64.b64encode(bytes_data).decode("utf-8")
-                        parts.append({
-                            "inline_data": {
-                                "mime_type": uploaded_file.type,
-                                "data": base64_image
-                            }
-                        })
-                        
-                    payload = {"contents": [{"parts": parts}]}
-                    res = requests.post(url, json=payload, timeout=30)
-                    
-                    if res.status_code == 200:
-                        data = res.json()
-                        result_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                        st.success("✨ 獨家戰術行銷包生成完成！")
-                        st.code(result_text, language="markdown")
-                    else:
-                        st.error(f"文案生成失敗 API 錯誤：{res.text}")
-                except Exception as e:
-                    st.error(f"文案執行出錯：{str(e)}")
+                        contents.append(
+                            types.Part.from_bytes(
+                                data=bytes_data,
+                                mime_type=uploaded_file.type,
+                            )
+                        )
 
-            # 2. 顯示影片預覽與生成模組
-            st.divider()
-            st.subheader("🎥 6. AI 商品短影音動態預覽")
-            
-            # 使用開放式美妝/商品展示預覽影片直接渲染播放器
-            sample_video_url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-            st.video(sample_video_url)
-            st.caption("💡 上方為 AI 自動匹配之動態短影音預覽，您可直接長按影片下載或儲存至平板！")
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=contents,
+                    )
+
+                    st.success("✨ 獨家戰術行銷包生成完成！")
+                    st.code(response.text, language="markdown")
+
+                    st.divider()
+                    st.subheader("🎥 6. AI 商品短影音動態預覽")
+                    sample_video_url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+                    st.video(sample_video_url)
+                    st.caption("💡 上方為 AI 自動匹配之動態短影音預覽，您可直接長按影片下載或儲存至平板！")
+
+                except Exception as e:
+                    st.error(f"執行出錯：{str(e)}")
