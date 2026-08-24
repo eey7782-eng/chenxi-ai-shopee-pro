@@ -12,7 +12,7 @@ if not api_key:
     api_key = st.text_input("請貼上您的 Gemini API Key：", type="password")
 
 if api_key:
-    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (自訂指令影片生成版)")
+    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (您的專屬 Prompt 影片引擎)")
     
     col1, col2 = st.columns([1, 1])
     
@@ -27,20 +27,29 @@ if api_key:
         selling_points = st.text_area("本品獨家賣點", "極速吸收、專利控油成分、敏弱肌專用")
         
         st.divider()
-        st.subheader("🎬 自訂 9:16 影片視覺指令 (核心)")
-        custom_video_prompt = st.text_area(
-            "請輸入您的專屬影片指令（例如：luxury cosmetic bottle on marble stone, cinematic warm lighting, 4k, vertical）", 
-            f"commercial product photography of {product_name}, luxury studio lighting, high resolution, 4k, vertical view"
+        st.subheader("🎬 您的專屬 9:16 AI 影片指令 (已自動套用)")
+        
+        # 將您的專屬 Prompt 作為動態模板
+        default_user_prompt = (
+            f"Use the product '{product_name}' ({selling_points}) as the only subject. "
+            "Keep its original brand, packaging, colors, text, proportions, and details unchanged. "
+            "Create a premium e-commerce visual with the product centered on a clean background. "
+            "For posters, use Traditional Chinese titles and three selling points. "
+            "For videos, use smooth full-view-to-close-up camera movement. "
+            "No people, hands, watermarks, extra products, altered packaging, messy backgrounds, or exaggerated claims. "
+            "Suitable for Shopee and TikTok. 9:16 vertical 4k studio lighting."
         )
         
-        uploaded_file = st.file_uploader("上傳商品圖片 (選填，若未上傳將依據上方指令自動繪製圖面)", type=["jpg", "jpeg", "png"])
+        custom_video_prompt = st.text_area("已為您整合萬用指令：", default_user_prompt, height=180)
         
-        btn = st.button("🚀 執行 AI 文案 + 依照指令生成 9:16 影片", type="primary", use_container_width=True)
+        uploaded_file = st.file_uploader("上傳商品圖片 (選填，有上傳會優先以原圖做 9:16 運鏡)", type=["jpg", "jpeg", "png"])
+        
+        btn = st.button("🚀 生成戰術行銷包 + 專屬指令 9:16 影片", type="primary", use_container_width=True)
 
     with col2:
         if btn:
             # 1. 生成行銷文案與腳本
-            with st.spinner("AI 正在分析並生成文案..."):
+            with st.spinner("AI 正在分析競品痛點並生成文案..."):
                 try:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
                     
@@ -51,11 +60,11 @@ if api_key:
 - 競品痛點：{competitor_flaw}
 - 本品賣點：{selling_points}
 
-請輸出：
+請依據繁體中文輸出：
 1. 🥊 高轉化蝦皮標題 (60字內)
-2. 🎯 五感沉浸式商品描述
+2. 🎯 五感沉浸式商品描述 (含競品避坑指南、痛點解決、3大賣點)
 3. 📈 蝦皮搜尋演算法關鍵字矩陣
-4. 🎬 短影音分鏡腳本
+4. 🎬 TikTok / Shopee 9:16 衝動購物型短影音分鏡腳本
 """
                     parts = [{"text": prompt}]
                     
@@ -75,31 +84,30 @@ if api_key:
                     if res.status_code == 200:
                         data = res.json()
                         result_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                        st.success("✨ 行銷戰術包生成完成！")
+                        st.success("✨ 獨家戰術行銷包生成完成！")
                         st.code(result_text, language="markdown")
                     else:
                         st.error(f"API 錯誤：{res.text}")
                 except Exception as e:
                     st.error(f"執行出錯：{str(e)}")
 
-            # 2. 嚴格依據使用者自訂指令渲染 9:16 影片
+            # 2. 嚴格執行您的 Prompt 規範進行 9:16 動態運鏡與繪製
             st.divider()
-            st.subheader("🎥 6. 依據您的指令所生成的 9:16 短影音")
+            st.subheader("🎥 6. 依據您的指令生成的 9:16 展演短影音")
             
             if uploaded_file:
                 img_data = base64.b64encode(uploaded_file.getvalue()).decode()
                 img_src = f"data:{uploaded_file.type};base64,{img_data}"
             else:
-                # 這裡直接套用使用者在左側輸入的 custom_video_prompt 去繪製畫面
                 img_src = f"https://pollinations.ai/p/{custom_video_prompt.replace(' ', '%20')}?width=720&height=1280&seed=42&model=flux"
 
             html_code = f"""
             <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
-                <!-- 9:16 Canvas (360x640) 完美防遮擋安全比例 -->
+                <!-- 9:16 Canvas (360x640) 無浮水印、純淨背景、相容 TikTok/蝦皮安全區 -->
                 <canvas id="shopeeCanvas" width="360" height="640" style="border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); background: #111;"></canvas>
                 <div style="display: flex; gap: 10px;">
-                    <button id="recBtn" onclick="startRecording()" style="padding: 10px 20px; background: #FF5722; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">🎥 開始依照指令渲染 9:16 影片</button>
-                    <a id="downloadLink" style="display: none; padding: 10px 20px; background: #00C853; color: white; border-radius: 8px; font-weight: bold; text-decoration: none;">📥 下載您的自訂指令 9:16 MP4</a>
+                    <button id="recBtn" onclick="startRecording()" style="padding: 10px 20px; background: #FF5722; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">🎥 渲染 9:16 全景至特寫運鏡影片</button>
+                    <a id="downloadLink" style="display: none; padding: 10px 20px; background: #00C853; color: white; border-radius: 8px; font-weight: bold; text-decoration: none;">📥 下載蝦皮/TikTok 相容 MP4 (.mp4)</a>
                 </div>
             </div>
 
@@ -111,7 +119,6 @@ if api_key:
                 img.src = "{img_src}";
 
                 let scale = 1.0;
-                let lightX = -360;
                 let step = 0;
 
                 img.onload = function() {{
@@ -121,59 +128,66 @@ if api_key:
                 function drawFrame() {{
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     
-                    // 等比例縮放與置中，防止畫面變形或過大
+                    // 保持原圖片比例與細節，置於純淨背景中
                     const imgRatio = img.width / img.height;
                     const canvasRatio = canvas.width / canvas.height;
-                    let renderW, renderH, offsetX, offsetY;
+                    let renderW, renderH;
 
                     if (imgRatio > canvasRatio) {{
-                        renderH = canvas.height * 0.75;
+                        renderH = canvas.height * 0.70;
                         renderW = renderH * imgRatio;
                     }} else {{
-                        renderW = canvas.width * 0.85;
+                        renderW = canvas.width * 0.80;
                         renderH = renderW / imgRatio;
                     }}
 
-                    scale = 1.0 + Math.sin(step * 0.02) * 0.03;
+                    // 執行您的指令規範：從「全景平滑推進至特寫 (smooth full-view-to-close-up camera movement)」
+                    // 使用正弦曲線模擬專業攝影滑軌
+                    const progress = (Math.sin(step * 0.015) + 1) / 2; // 0 到 1 循環
+                    scale = 1.0 + progress * 0.22; // 由 1.0 倍推近至 1.22 倍特寫
+
                     const finalW = renderW * scale;
                     const finalH = renderH * scale;
                     
-                    offsetX = (canvas.width - finalW) / 2;
-                    offsetY = (canvas.height - finalH) / 2 - 30;
+                    const offsetX = (canvas.width - finalW) / 2;
+                    const offsetY = (canvas.height - finalH) / 2 - 20;
 
-                    ctx.fillStyle = "#181818";
+                    // 極簡高品質工作室純色背景 (Clean background, no messy background)
+                    ctx.fillStyle = "#121212";
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                     
+                    // 渲染商品本體 (保持比例不變形)
                     ctx.drawImage(img, offsetX, offsetY, finalW, finalH);
 
-                    // 動態掃光特效
-                    lightX += 5;
-                    if (lightX > canvas.width * 2) lightX = -canvas.width;
-                    const gradient = ctx.createLinearGradient(lightX, 0, lightX + 80, canvas.height);
-                    gradient.addColorStop(0, 'rgba(255,255,255,0)');
-                    gradient.addColorStop(0.5, 'rgba(255,255,255,0.18)');
-                    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+                    // 柔和專業棚燈光影 (Studio Lighting)
+                    const gradient = ctx.createRadialGradient(
+                        canvas.width/2, canvas.height/2 - 20, 50,
+                        canvas.width/2, canvas.height/2 - 20, 250
+                    );
+                    gradient.addColorStop(0, 'rgba(255,255,255,0.08)');
+                    gradient.addColorStop(1, 'rgba(0,0,0,0.5)');
                     ctx.fillStyle = gradient;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                    // 縮小字體與安全區排版（避開 TikTok / 蝦皮介面按鈕）
-                    const boxW = canvas.width - 60;
-                    const boxH = 50;
-                    const boxX = 30;
-                    const boxY = canvas.height - 110;
+                    // 繁體中文 3 大賣點安全區資訊卡 (避開邊界與 UI 遮擋)
+                    const boxW = canvas.width - 50;
+                    const boxH = 55;
+                    const boxX = 25;
+                    const boxY = canvas.height - 115;
 
-                    ctx.fillStyle = "rgba(0,0,0,0.75)";
-                    ctx.roundRect(boxX, boxY, boxW, boxH, 8);
+                    ctx.fillStyle = "rgba(0,0,0,0.8)";
+                    ctx.roundRect(boxX, boxY, boxW, boxH, 10);
                     ctx.fill();
 
                     ctx.fillStyle = "#FFFFFF";
-                    ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-                    const displayTitle = "{product_name}".length > 15 ? "{product_name}".substring(0, 15) + "..." : "{product_name}";
+                    ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, sans-serif";
+                    const displayTitle = "{product_name}".length > 14 ? "{product_name}".substring(0, 14) + "..." : "{product_name}";
                     ctx.fillText(displayTitle, boxX + 12, boxY + 22);
 
                     ctx.fillStyle = "#FF5722";
-                    ctx.font = "bold 12px sans-serif";
-                    ctx.fillText("🔥 限時下殺 NT$ {price}", boxX + 12, boxY + 39);
+                    ctx.font = "bold 11px sans-serif";
+                    const spText = "{selling_points}".replace(/\\n/g, ' | ').substring(0, 22);
+                    ctx.fillText("✨ " + spText, boxX + 12, boxY + 41);
 
                     step++;
                     requestAnimationFrame(drawFrame);
@@ -181,7 +195,7 @@ if api_key:
 
                 function startRecording() {{
                     const btn = document.getElementById('recBtn');
-                    btn.innerText = "⏳ 正在根據您的指令渲染影片...";
+                    btn.innerText = "⏳ 正在依照您的指令運算 9:16 影片...";
                     btn.disabled = true;
 
                     let options = {{ mimeType: 'video/mp4;codecs=avc1.42E01E' }};
