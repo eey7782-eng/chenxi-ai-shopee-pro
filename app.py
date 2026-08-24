@@ -33,7 +33,8 @@ if api_key:
         if btn:
             with st.spinner("AI 正在分析競品痛點並生成獨家戰術文案..."):
                 try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+                    # 更新為最新的 gemini-3.6-flash 模型
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
                     
                     prompt = f"""你是一位擅長「降維打擊」與「心智占領」的頂級電商行銷操盤手。
 請針對以下商品資訊，避開市面上常見的罐頭套路，產生一套極具差異化與殺傷力的蝦皮上架組合：
