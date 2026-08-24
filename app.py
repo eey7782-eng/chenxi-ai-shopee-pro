@@ -12,7 +12,7 @@ if not api_key:
     api_key = st.text_input("請貼上您的 Gemini API Key：", type="password")
 
 if api_key:
-    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (含影片生成模組)")
+    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (商品專屬動態生成)")
     
     col1, col2 = st.columns([1, 1])
     
@@ -27,11 +27,12 @@ if api_key:
         selling_points = st.text_area("本品獨家賣點", "極速吸收、專利控油成分、敏弱肌專用")
         uploaded_file = st.file_uploader("上傳商品圖片 (選填)", type=["jpg", "jpeg", "png"])
         
-        btn = st.button("🚀 生成獨家降維打擊行銷包 + AI 影片", type="primary", use_container_width=True)
+        btn = st.button("🚀 生成獨家戰術行銷包 + 專屬動態商品圖", type="primary", use_container_width=True)
 
     with col2:
         if btn:
-            with st.spinner("AI 正在分析競品痛點並生成獨家戰術文案..."):
+            # 1. 生成文案與行銷組合
+            with st.spinner("1/2 AI 正在分析競品痛點並生成獨家戰術文案..."):
                 try:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
                     
@@ -50,7 +51,7 @@ if api_key:
 2. 🎯 五感沉浸式商品描述 (包含：【競品避坑指南】、【痛點解決】、【實測體驗】)
 3. 📈 蝦皮搜尋演算法關鍵字矩陣
 4. 🎬 TikTok / Shopee 衝動購物型 15秒黃金前3秒短影音分鏡
-5. 🎨 專用英文影片生成 Prompt
+5. 🎨 專用英文影片生成 Prompt (請精簡為 20 字以內的英文關鍵字，專門用於商業攝影)
 """
                     parts = [{"text": prompt}]
                     
@@ -72,14 +73,19 @@ if api_key:
                         result_text = data["candidates"][0]["content"]["parts"][0]["text"]
                         st.success("✨ 獨家戰術行銷包生成完成！")
                         st.code(result_text, language="markdown")
-
-                        st.divider()
-                        st.subheader("🎥 6. AI 商品短影音動態預覽")
-                        # 替換為支援跨網域相容的穩定影片網址
-                        sample_video_url = "https://vjs.zencdn.net/v/oceans.mp4"
-                        st.video(sample_video_url)
-                        st.caption("💡 上方為 AI 自動匹配之動態短影音預覽，您可直接點擊播放或長按儲存至平板！")
                     else:
                         st.error(f"API 錯誤：{res.text}")
                 except Exception as e:
                     st.error(f"執行出錯：{str(e)}")
+
+            # 2. 根據商品即時生成專屬高清商業動態視覺
+            with st.spinner("2/2 正在為您的商品即時渲染專屬視覺..."):
+                try:
+                    image_prompt = f"commercial product shot of {product_name}, luxury studio lighting, high resolution, 4k"
+                    img_url = f"https://pollinations.ai/p/{image_prompt.replace(' ', '%20')}?width=800&height=450&seed=42&model=flux"
+                    
+                    st.divider()
+                    st.subheader("🖼️ 6. 本商品專屬 AI 商業行銷視覺")
+                    st.image(img_url, caption=f"✨ 為 {product_name} 即時算出的專屬商業展示圖 (可在平板長按儲存)")
+                except Exception as e:
+                    st.info("💡 視覺渲染連線超時，文案已為您完整生成。")
