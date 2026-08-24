@@ -12,7 +12,7 @@ if not api_key:
     api_key = st.text_input("請貼上您的 Gemini API Key：", type="password")
 
 if api_key:
-    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (9:16 可下載影片版)")
+    st.title("🔥 蝦皮獨家爆款 AI 戰術系統 (TikTok 格式相容版)")
     
     col1, col2 = st.columns([1, 1])
     
@@ -27,7 +27,7 @@ if api_key:
         selling_points = st.text_area("本品獨家賣點", "極速吸收、專利控油成分、敏弱肌專用")
         uploaded_file = st.file_uploader("上傳商品圖片 (選填)", type=["jpg", "jpeg", "png"])
         
-        btn = st.button("🚀 生成戰術行銷包 + 9:16 影片", type="primary", use_container_width=True)
+        btn = st.button("🚀 生成戰術行銷包 + 9:16 短影音", type="primary", use_container_width=True)
 
     with col2:
         if btn:
@@ -74,9 +74,9 @@ if api_key:
                 except Exception as e:
                     st.error(f"執行出錯：{str(e)}")
 
-            # 9:16 畫質渲染與 MP4 匯出引擎
+            # 9:16 TikTok 標準格式視訊區
             st.divider()
-            st.subheader("🎥 6. 9:16 直立式短影音合成與下載")
+            st.subheader("🎥 6. 9:16 TikTok 規格標準影片匯出")
             
             if uploaded_file:
                 img_data = base64.b64encode(uploaded_file.getvalue()).decode()
@@ -85,13 +85,12 @@ if api_key:
                 image_prompt = f"commercial product shot of {product_name}, luxury studio lighting, high resolution, 4k"
                 img_src = f"https://pollinations.ai/p/{image_prompt.replace(' ', '%20')}?width=720&height=1280&seed=42&model=flux"
 
-            # 9:16 Canvas 畫面繪製與動態錄影元件
             html_code = f"""
             <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
                 <canvas id="videoCanvas" width="360" height="640" style="border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); background: #000;"></canvas>
                 <div style="display: flex; gap: 10px;">
-                    <button id="recBtn" onclick="startRecording()" style="padding: 10px 20px; background: #FF4B4B; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">🎥 渲染 9:16 動態影片</button>
-                    <a id="downloadLink" style="display: none; padding: 10px 20px; background: #00C853; color: white; border-radius: 8px; font-weight: bold; text-decoration: none;">📥 下載 9:16 宣傳影片 (.mp4)</a>
+                    <button id="recBtn" onclick="startRecording()" style="padding: 10px 20px; background: #FF4B4B; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">🎥 渲染 9:16 H.264 影片</button>
+                    <a id="downloadLink" style="display: none; padding: 10px 20px; background: #00C853; color: white; border-radius: 8px; font-weight: bold; text-decoration: none;">📥 下載 TikTok 相容影片 (.mp4)</a>
                 </div>
             </div>
 
@@ -113,7 +112,6 @@ if api_key:
                 function drawFrame() {{
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     
-                    // 1. 3D 鏡頭推軌效果 (Scale & Pan)
                     scale = 1.0 + Math.sin(step * 0.02) * 0.08;
                     const sw = canvas.width * scale;
                     const sh = canvas.height * scale;
@@ -121,7 +119,6 @@ if api_key:
                     const sy = (canvas.height - sh) / 2;
                     ctx.drawImage(img, sx, sy, sw, sh);
 
-                    // 2. 掃光特效
                     lightX += 6;
                     if (lightX > canvas.width * 2) lightX = -canvas.width;
                     const gradient = ctx.createLinearGradient(lightX, 0, lightX + 100, canvas.height);
@@ -131,7 +128,6 @@ if api_key:
                     ctx.fillStyle = gradient;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                    // 3. 9:16 爆款字卡 overlay
                     ctx.fillStyle = "rgba(0,0,0,0.65)";
                     ctx.roundRect(20, canvas.height - 100, canvas.width - 40, 70, 12);
                     ctx.fill();
@@ -149,11 +145,20 @@ if api_key:
 
                 function startRecording() {{
                     const btn = document.getElementById('recBtn');
-                    btn.innerText = "⏳ 正在生成 5秒 影片...";
+                    btn.innerText = "⏳ 正在處理 TikTok 編碼...";
                     btn.disabled = true;
 
+                    // 優先使用 H.264 / AVC 視訊格式（iOS 與 TikTok 標準格式）
+                    let mimeType = 'video/mp4;codecs=avc1.42E01E';
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {{
+                        mimeType = 'video/mp4';
+                    }}
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {{
+                        mimeType = 'video/webm;codecs=h264';
+                    }}
+
                     const stream = canvas.captureStream(30);
-                    const mediaRecorder = new MediaRecorder(stream, {{ mimeType: 'video/webm' }});
+                    const mediaRecorder = new MediaRecorder(stream, {{ mimeType: mimeType }});
                     let chunks = [];
 
                     mediaRecorder.ondataavailable = e => chunks.push(e.data);
@@ -162,13 +167,13 @@ if api_key:
                         const url = URL.createObjectURL(blob);
                         const a = document.getElementById('downloadLink');
                         a.href = url;
-                        a.download = "{product_name}_9x16_promo.mp4";
+                        a.download = "{product_name}_TikTok.mp4";
                         a.style.display = "inline-block";
-                        btn.innerText = "✅ 渲染完成！";
+                        btn.innerText = "✅ 編碼完成！";
                     }};
 
                     mediaRecorder.start();
-                    setTimeout(() => mediaRecorder.stop(), 5000); // 錄製 5 秒爆款短影音
+                    setTimeout(() => mediaRecorder.stop(), 5000);
                 }}
             </script>
             """
