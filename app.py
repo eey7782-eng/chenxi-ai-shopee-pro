@@ -1,12 +1,14 @@
 import json
 import os
 import hashlib
+import io
+import pandas as pd
 from datetime import datetime, date, timedelta
 import streamlit as st
 
 # 常數設定
 APP_NAME = "黑金剛 AI"
-APP_VERSION = "2.5"
+APP_VERSION = "2.5 (蝦皮半自動版)"
 MEMBERS_FILE = "members.json"
 HISTORY_FILE = "history.json"
 
@@ -87,26 +89,32 @@ def detect_product_category(name: str) -> str:
     food_keywords = ["甘草", "芭樂", "零食", "餅乾", "特產", "美食", "水果"]
     return "食品" if any(k in name for k in food_keywords) else "通用商品"
 
-def process_image(uploaded_file):
-    from PIL import Image
-    import io
-    image = Image.open(uploaded_file)
-    buf = io.BytesIO()
-    image.save(buf, format="JPEG")
-    return image, buf.getvalue()
-
 # AI 生成模擬
-def analyze_product(name, category, price, selling_points):
-    return f"【分析報告】名稱：{name}｜分類：{category}｜價格：{price}｜賣點：{selling_points}"
+def generate_shopee_title(name, category):
+    return f"🔥【現貨速發】{name} ｜ 超值熱銷優選 #{category}"
 
 def generate_shopee_copy(name, category, price, selling_points):
-    return f"🔥【爆款推薦】{name}\n✨賣點：{selling_points}\n💰限時價：NT${price}\n#蝦皮好物 #{name}"
-
-def generate_tiktok_copy(name, selling_points):
-    return f"🎬 TikTok 15秒腳本：{name}\n[前3秒] 還在找{name}嗎？\n[賣點] {selling_points}\n[行動] 點擊左下角下單！"
+    return f"✨【{name}】必買三大理由：\n1. {selling_points or '嚴選品質，買得安心'}\n2. 高CP值，優惠價只要 NT$ {price}\n3. 快速出貨，售後有保障！\n\n📦 商品規格：\n- 類別：{category}\n- 狀態：全新現貨\n\n#蝦皮優選 #{category} #{name} #熱銷爆款"
 
 def generate_seedance_prompt(name, category, price, selling_points):
     return f"{JIMENG_25_CORE_RULES}\nProduct: {name}\nStyle: 8k commercial photo --v 2.5"
+
+# 蝦皮 CSV 批量檔案生成器
+def export_shopee_csv(product_list):
+    df_data = []
+    for p in product_list:
+        df_data.append({
+            "商品名稱": p.get("title", ""),
+            "商品描述": p.get("description", ""),
+            "價格": p.get("price", 0),
+            "庫存": p.get("stock", 99),
+            "重量(kg)": p.get("weight", 0.5),
+            "出貨天數": 2
+        })
+    df = pd.DataFrame(df_data)
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+    return csv_buffer.getvalue()
 
 # UI 初始化
 def inject_css():
@@ -115,44 +123,76 @@ def inject_css():
 def init_session():
     defaults = {
         "logged_in": False, "username": "", "role": "", "page": "Dashboard",
-        "analysis_result": "", "generated_shopee": "", "generated_tiktok": "",
-        "generated_jimeng": "", "gemini_error": ""
+        "generated_title": "", "generated_shopee": "", "generated_jimeng": "",
+        "shopee_queue": []
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-# 頁面內容
+# 登入與註冊頁面
 def login_page():
-    st.markdown(f"<div class='hero'><h1>⚫ {APP_NAME}</h1><p>AI 商品營運系統</p></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='hero'><h1>⚫ {APP_NAME}</h1><p>蝦皮半自動化 AI 營運系統</p></div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
+    
     with col2:
-        st.subheader("登入系統")
-        u = st.text_input("帳號", key="login_u")
-        p = st.text_input("密碼", type="password", key="login_p")
-        if st.button("登入", type="primary", use_container_width=True, key="login_btn"):
-            members = load_members()
-            m = members.get(u)
-            if m and verify_password(p, m.get("password", "")):
-                if not member_is_active(m):
-                    st.error("帳號已停用或過期。")
-                    return
-                st.session_state.logged_in = True
-                st.session_state.username = u
-                st.session_state.role = m.get("role", "member")
-                st.session_state.page = "Dashboard"
-                st.rerun()
-            else:
-                st.error("帳號或密碼錯誤。")
+        tab1, tab2 = st.tabs(["🔑 會員登入", "📝 註冊帳號"])
+        with tab1:
+            u = st.text_input("帳號", key="login_u")
+            p = st.text_input("密碼", type="password", key="login_p")
+            if st.button("登入", type="primary", use_container_width=True, key="login_btn"):
+                members = load_members()
+                m = members.get(u)
+                if m and verify_password(p, m.get("password", "")):
+                    if not member_is_active(m):
+                        st.error("帳號已停用或過期。")
+                        return
+                    st.session_state.logged_in = True
+                    st.session_state.username = u
+                    st.session_state.role = m.get("role", "member")
+                    st.session_state.page = "蝦皮半自動工作台"
+                    st.rerun()
+                else:
+                    st.error("帳號或密碼錯誤。")
+                    
+        with tab2:
+            new_u = st.text_input("設定新帳號", key="reg_u")
+            new_p = st.text_input("設定新密碼", type="password", key="reg_p")
+            confirm_p = st.text_input("再次確認密碼", type="password", key="reg_cp")
+            if st.button("免費註冊 (送 7 天試用)", use_container_width=True, key="reg_btn"):
+                members = load_members()
+                if not new_u or not new_p:
+                    st.warning("請輸入帳號與密碼。")
+                elif new_p != confirm_p:
+                    st.error("兩次輸入的密碼不一致！")
+                elif new_u in members:
+                    st.error("此帳號已被註冊。")
+                else:
+                    # 調整為 7 天試用期
+                    exp_date = (date.today() + timedelta(days=7)).isoformat()
+                    members[new_u] = {
+                        "username": new_u, "password": hash_password(new_p),
+                        "role": "member", "expires": exp_date, "active": True,
+                        "created_at": datetime.now().isoformat()
+                    }
+                    save_members(members)
+                    st.success("註冊成功！已贈送 7 天免費試用，請切換至「會員登入」分頁進行登入。")
 
 def sidebar():
     members = load_members()
     current = members.get(st.session_state.username, {})
     with st.sidebar:
-        st.title("⚫ 黑金剛")
+        st.title("⚫ 黑金剛 AI")
         st.caption(f"使用者：{st.session_state.username}")
+        
+        # 顯示剩餘天數
+        if current.get("expires") == "永久":
+            st.success("♾️ 永久會員")
+        else:
+            st.info(f"⏳ 試用剩餘 {days_remaining(current)} 天")
+
         st.divider()
-        pages = ["Dashboard", "商品上架工作台", "歷史紀錄", "TikTok短影音", "蝦皮分潤管理"]
+        pages = ["蝦皮半自動工作台", "批量匯出 CSV", "歷史紀錄"]
         if st.session_state.role == "admin":
             pages.append("管理員中心")
         selected = st.radio("選單", pages, key="menu_radio")
@@ -162,92 +202,89 @@ def sidebar():
             st.session_state.logged_in = False
             st.rerun()
 
-def dashboard():
-    st.title("Dashboard")
-    st.metric("歷史總紀錄數", len(load_history()))
-
-def product_workspace():
-    st.title("📦 商品上架工作台")
+# 蝦皮半自動工作台
+def shopee_auto_workspace():
+    st.title("⚡ 蝦皮半自動上架工作台")
+    
     c1, c2 = st.columns(2)
     with c1:
         p_name = st.text_input("商品名稱", key="p_name")
-        p_cat = st.text_input("分類", key="p_cat")
-        p_price = st.number_input("價格", value=999, key="p_price")
-        p_points = st.text_area("賣點", key="p_points")
+        p_cat = st.text_input("分類 (如：美食/服飾)", key="p_cat")
+        p_price = st.number_input("蝦皮售價", value=299, key="p_price")
+        p_stock = st.number_input("預設庫存", value=99, key="p_stock")
     with c2:
-        uploaded = st.file_uploader("圖片", key="p_img")
+        p_points = st.text_area("核心賣點", placeholder="輸入產品優勢...", height=130, key="p_points")
 
-    selected = st.multiselect("產生項目", ["商品分析", "蝦皮文案", "TikTok腳本", "即夢 Prompt"], default=["蝦皮文案", "即夢 Prompt"], key="p_select")
-    if st.button("🚀 開始生成", type="primary", use_container_width=True, key="gen_btn"):
+    if st.button("🚀 生成蝦皮半自動文案", type="primary", use_container_width=True, key="gen_btn"):
         if not p_name:
-            st.warning("請輸入名稱")
+            st.warning("請輸入商品名稱")
             return
         cat = p_cat or detect_product_category(p_name)
-        st.session_state.generated_shopee = generate_shopee_copy(p_name, cat, p_price, p_points) if "蝦皮文案" in selected else ""
-        st.session_state.generated_jimeng = generate_seedance_prompt(p_name, cat, p_price, p_points) if "即夢 Prompt" in selected else ""
-        save_history({
-            "created_at": datetime.now().isoformat(),
-            "username": st.session_state.username,
-            "product": {"名稱": p_name, "價格": p_price},
-            "shopee": st.session_state.generated_shopee,
-            "jimeng": st.session_state.generated_jimeng
-        })
-        st.success("成功生成並儲存！")
+        st.session_state.generated_title = generate_shopee_title(p_name, cat)
+        st.session_state.generated_shopee = generate_shopee_copy(p_name, cat, p_price, p_points)
+        st.session_state.generated_jimeng = generate_seedance_prompt(p_name, cat, p_price, p_points)
+        st.success("生成完成！")
 
     if st.session_state.generated_shopee:
-        st.text_area("蝦皮文案", st.session_state.generated_shopee, height=200)
-    if st.session_state.generated_jimeng:
-        st.text_area("即夢 Prompt", st.session_state.generated_jimeng, height=300)
+        st.divider()
+        st.subheader("1️⃣ 最佳化蝦皮標題")
+        st.code(st.session_state.generated_title, language=None)
+
+        st.subheader("2️⃣ 蝦皮內文描述")
+        st.text_area("內文區塊", st.session_state.generated_shopee, height=200)
+
+        if st.button("➕ 加入「蝦皮批量上架佇列」", use_container_width=True, key="add_queue_btn"):
+            st.session_state.shopee_queue.append({
+                "title": st.session_state.generated_title,
+                "description": st.session_state.generated_shopee,
+                "price": p_price,
+                "stock": p_stock
+            })
+            st.success(f"已加入佇列！目前累積 {len(st.session_state.shopee_queue)} 件商品準備批量匯出。")
+
+# 批量匯出 CSV 頁面
+def export_page():
+    st.title("📦 蝦皮批量匯出 (CSV)")
+    queue = st.session_state.shopee_queue
+    st.write(f"目前佇列中共有 **{len(queue)}** 筆待上架商品。")
+
+    if queue:
+        st.dataframe(pd.DataFrame(queue))
+        csv_data = export_shopee_csv(queue)
+        
+        st.download_button(
+            label="⬇️ 下載蝦皮批量上架 CSV 檔",
+            data=csv_data,
+            file_name=f"shopee_batch_{date.today().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            type="primary",
+            use_container_width=True,
+            key="dl_csv_btn"
+        )
+        if st.button("清空佇列", key="clear_queue"):
+            st.session_state.shopee_queue = []
+            st.rerun()
+    else:
+        st.info("請先到「蝦皮半自動工作台」生成商品並點擊「加入佇列」。")
 
 def history_page():
     st.title("🕘 歷史紀錄")
     records = load_history()
-    for i, r in enumerate(records):
+    for r in records:
         with st.expander(f"{r.get('product', {}).get('名稱', '未知')} - {r.get('created_at', '')}"):
             st.json(r)
 
-def tiktok_page():
-    st.title("🎬 TikTok 短影音")
-    name = st.text_input("商品名稱", key="tk_name")
-    if st.button("產生腳本", key="tk_btn"):
-        st.text_area("腳本結果", generate_tiktok_copy(name, "熱銷爆款"), height=300)
-
-def affiliate_page():
-    st.title("💰 蝦皮分潤試算")
-    p = st.number_input("商品售價", value=1000, key="aff_p")
-    c = st.number_input("分潤 %", value=5, key="aff_c")
-    st.metric("預估收益", f"NT$ {p * c / 100:.0f}")
-
 def admin_center():
-    if st.session_state.role != "admin":
-        return
+    if st.session_state.role != "admin": return
     st.title("👑 管理員中心")
     members = load_members()
-    st.write("目前會員清單：", list(members.keys()))
-    
-    u = st.text_input("新會員帳號", key="adm_u")
-    p = st.text_input("新會員密碼", type="password", key="adm_p")
-    if st.button("建立會員", key="adm_btn"):
-        if u and p:
-            members[u] = {
-                "username": u,
-                "password": hash_password(p),
-                "role": "member",
-                "expires": "永久",
-                "active": True,
-                "created_at": datetime.now().isoformat()
-            }
-            save_members(members)
-            st.success("會員建立成功！")
-            st.rerun()
+    st.write("目前帳號清單：", list(members.keys()))
 
 def render_page():
     p = st.session_state.page
-    if p == "Dashboard": dashboard()
-    elif p == "商品上架工作台": product_workspace()
+    if p == "蝦皮半自動工作台": shopee_auto_workspace()
+    elif p == "批量匯出 CSV": export_page()
     elif p == "歷史紀錄": history_page()
-    elif p == "TikTok短影音": tiktok_page()
-    elif p == "蝦皮分潤管理": affiliate_page()
     elif p == "管理員中心": admin_center()
 
 def main():
