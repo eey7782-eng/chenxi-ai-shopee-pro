@@ -4,9 +4,9 @@ import json
 
 st.set_page_config(page_title="蝦皮分潤 AI 控制台", page_icon="🛍️", layout="wide")
 
-# ==================== 1. 初始化會員資料庫 (Session 內建) ====================
+# ==================== 1. 初始化帳號資料庫 (Session 內建) ====================
 if "user_db" not in st.session_state:
-    # 預設管理員帳號：admin / 密碼：123456
+    # 預設管理員：admin / 123456
     st.session_state.user_db = {
         "admin": "123456"
     }
@@ -16,29 +16,53 @@ if "logged_in" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state.current_user = ""
 
-# ==================== 2. 登入介面 (未開放公開註冊) ====================
+# ==================== 2. 未登入狀態（開放註冊 / 登入 切換） ====================
 if not st.session_state.logged_in:
     st.title("🔐 蝦皮分潤 AI 管理系統")
-    st.caption("提示：不提供自由註冊，如需帳號請聯繫管理員。")
     
-    with st.form("login_form"):
-        user_input = st.text_input("帳號")
-        pass_input = st.text_input("密碼", type="password")
-        submit_button = st.form_submit_button("登入系統")
+    tab1, tab2 = st.tabs(["🔑 會員登入", "📝 免費註冊帳號"])
 
-        if submit_button:
-            if user_input in st.session_state.user_db and st.session_state.user_db[user_input] == pass_input:
-                st.session_state.logged_in = True
-                st.session_state.current_user = user_input
-                st.success("登入成功！正在載入...")
-                st.rerun()
-            else:
-                st.error("❌ 帳號或密碼錯誤！")
+    # --- 頁籤 1：登入 ---
+    with tab1:
+        with st.form("login_form"):
+            login_user = st.text_input("帳號")
+            login_pass = st.text_input("密碼", type="password")
+            submit_login = st.form_submit_button("登入系統")
+
+            if submit_login:
+                if login_user in st.session_state.user_db and st.session_state.user_db[login_user] == login_pass:
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = login_user
+                    st.success("登入成功！正在載入...")
+                    st.rerun()
+                else:
+                    st.error("❌ 帳號或密碼錯誤，或該帳號尚未註冊！")
+
+    # --- 頁籤 2：使用者自行註冊 ---
+    with tab2:
+        st.subheader("建立新會員帳號")
+        with st.form("register_form"):
+            reg_user = st.text_input("設定帳號")
+            reg_pass1 = st.text_input("設定密碼", type="password")
+            reg_pass2 = st.text_input("確認密碼", type="password")
+            submit_reg = st.form_submit_button("完成註冊")
+
+            if submit_reg:
+                if not reg_user or not reg_pass1:
+                    st.warning("⚠️ 帳號與密碼不可留空！")
+                elif reg_user in st.session_state.user_db:
+                    st.error("❌ 此帳號已被使用，請換一個名稱！")
+                elif reg_pass1 != reg_pass2:
+                    st.error("❌ 兩次密碼輸入不一致！")
+                else:
+                    st.session_state.user_db[reg_user] = reg_pass1
+                    st.success("🎉 註冊成功！請切換至「會員登入」頁籤登入。")
+
     st.stop()
 
-# ==================== 3. 登入後的 VIP 專區 & 會員管理 ====================
+# ==================== 3. 登入後專區 & 管理員功能 ====================
 with st.sidebar:
-    st.write(f"👤 當前使用者：**{st.session_state.current_user}**")
+    st.write(f"👤 當前會員：**{st.session_state.current_user}**")
     if st.button("🚪 登出"):
         st.session_state.logged_in = False
         st.session_state.current_user = ""
@@ -46,34 +70,19 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # 👑 管理員專用：會員新增與刪除區塊
+    # 👑 管理員專用：刪除會員帳號
     if st.session_state.current_user == "admin":
-        st.header("👑 會員帳號管理")
-        
-        # --- 新增會員 ---
-        with st.expander("➕ 新增會員帳號"):
-            new_u = st.text_input("新帳號", key="add_u")
-            new_p = st.text_input("新密碼", type="password", key="add_p")
-            if st.button("確認新增"):
-                if new_u and new_p:
-                    st.session_state.user_db[new_u] = new_p
-                    st.success(f"已成功新增帳號：{new_u}")
-                else:
-                    st.warning("請填寫完整的帳號與密碼！")
-
-        # --- 刪除會員 ---
-        with st.expander("❌ 刪除會員帳號"):
-            # 列出除了 admin 以外的會員
+        st.header("👑 管理員後台")
+        with st.expander("❌ 刪除指定會員帳號"):
             other_users = [u for u in st.session_state.user_db.keys() if u != "admin"]
             if other_users:
                 del_user = st.selectbox("選擇要刪除的帳號：", other_users)
                 if st.button("確認刪除", type="primary"):
                     del st.session_state.user_db[del_user]
-                    st.success(f"已成功刪除帳號：{del_user}")
+                    st.success(f"已刪除帳號：{del_user}")
                     st.rerun()
             else:
-                st.info("目前無可刪除的其他會員帳號。")
-
+                st.info("目前沒有其他會員可刪除。")
         st.markdown("---")
 
     # API 設定
