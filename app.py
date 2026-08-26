@@ -162,17 +162,25 @@ else:
                         "Content-Type": "application/json"
                     }
                     
-                    # 針對 Bot 智能體的正確請求內容格式
+                    # 組合給 AI Bot 的提示詞
                     prompt_text = f"請幫我分析蝦皮商品：{product_url}\n【模板參數】\n- 品類：{category}\n- 風格：{style}\n- 影片比例：{aspect_ratio}\n- 目標受眾：{target_audience}\n- 額外要求：{extra_prompt}"
                     
+                    # 符合 Coze v2 Chat API 的標準 Payload 格式
                     bot_payload = {
                         "bot_id": bot_id,
-                        "user_id": st.session_state.get("username", "user123"),
+                        "user": st.session_state.get("username", "user123"),
                         "query": prompt_text,
+                        "chat_history": [
+                            {
+                                "role": "user",
+                                "content": prompt_text,
+                                "content_type": "text"
+                            }
+                        ],
                         "stream": False
                     }
                     
-                    # 呼叫 Bot API
+                    # 呼叫 API
                     response = requests.post(
                         "https://api.coze.cn/open_api/v2/chat",
                         headers=headers,
@@ -182,24 +190,30 @@ else:
                     
                     if response.status_code == 200:
                         res_json = response.json()
-                        st.success("✅ 多樣化影片與文案生成成功！")
                         
-                        # 解析 Bot 回傳訊息
-                        messages = res_json.get("messages", [])
-                        output_text = ""
-                        for msg in messages:
-                            if msg.get("type") == "answer":
-                                output_text += msg.get("content", "") + "\n\n"
-                        
-                        if output_text:
-                            st.markdown("### 📋 AI 生成結果")
-                            st.markdown(output_text)
+                        # 檢查 Coze 回傳邏輯狀態
+                        if res_json.get("code") == 0:
+                            st.success("✅ 多樣化影片與文案生成成功！")
+                            
+                            # 解析 Bot 回傳訊息
+                            messages = res_json.get("messages", [])
+                            output_text = ""
+                            for msg in messages:
+                                if msg.get("type") == "answer":
+                                    output_text += msg.get("content", "") + "\n\n"
+                            
+                            if output_text:
+                                st.markdown("### 📋 AI 生成結果")
+                                st.markdown(output_text)
+                            else:
+                                st.json(res_json)
                         else:
+                            st.error(f"❌ Coze 錯誤 ({res_json.get('code')}): {res_json.get('msg')}")
                             st.json(res_json)
                     else:
-                        st.error(f"❌ 生成失敗，錯誤碼：{response.status_code}")
+                        st.error(f"❌ 生成失敗，HTTP 錯誤碼：{response.status_code}")
                         st.write(response.text)
                 except requests.exceptions.Timeout:
-                    st.error("⏰ 請求超時，請檢查 Coze 側的模型是否設定為輕量高速模型（如 Doubao-pro 或 GPT-3.5）。")
+                    st.error("⏰ 請求超時！請確認 Coze 專案側的模型是否設定為高速模型（如 Doubao-pro 或 GPT-3.5）。")
                 except Exception as e:
                     st.error(f"❌ 發生系統錯誤：{e}")
