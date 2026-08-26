@@ -101,7 +101,8 @@ with st.sidebar:
     st.divider()
     st.title("⚙️ API 參數設定")
     coze_api_key = st.text_input("Coze API Key:", value=secrets_api_key, type="password")
-    bot_id = st.text_input("Bot ID:", value=secrets_bot_id)
+    resource_id = st.text_input("Bot ID 或 Workflow ID:", value=secrets_bot_id)
+    api_base = st.selectbox("Coze 平台版本:", ["https://api.coze.cn", "https://api.coze.com"], index=0)
 
 # -----------------------------------------------------------------------------
 # 4. 主頁面：蝦皮多樣化選擇與生成區
@@ -149,14 +150,14 @@ else:
 
     st.markdown("---")
 
-    # 步驟 3：開始生成 (使用 Coze v3 API 非同步處理)
+    # 步驟 3：開始生成 (自動相容 Bot 與 Workflow)
     if st.button("🚀 立即自動生成多樣化影片與文案", type="primary", use_container_width=True):
-        if not coze_api_key or not bot_id:
-            st.error("❌ 請先在左側欄設定 Coze API Key 與 Bot ID！")
+        if not coze_api_key or not resource_id:
+            st.error("❌ 請先在左側欄設定 Coze API Key 與 Bot ID / Workflow ID！")
         elif not product_url:
             st.warning("⚠️ 請輸入蝦皮商品連結！")
         else:
-            with st.spinner(f"⏳ 正在呼叫 Coze v3 引擎分析商品並生成「{category} - {style}」內容，請稍候..."):
+            with st.spinner(f"⏳ 正在調用「{category} - {style}」引擎生成中，約需 15-30 秒，請稍候..."):
                 try:
                     headers = {
                         "Authorization": f"Bearer {coze_api_key}",
@@ -165,88 +166,90 @@ else:
                     
                     prompt_text = f"請幫我分析蝦皮商品：{product_url}\n【模板參數】\n- 品類：{category}\n- 風格：{style}\n- 影片比例：{aspect_ratio}\n- 目標受眾：{target_audience}\n- 額外要求：{extra_prompt}"
                     
-                    # Coze v3 Chat API 請求格式
-                    bot_payload = {
-                        "bot_id": bot_id,
-                        "user_id": st.session_state.get("username", "user123"),
-                        "stream": False,
-                        "additional_messages": [
-                            {
-                                "role": "user",
-                                "content": prompt_text,
-                                "content_type": "text"
-                            }
-                        ]
+                    # 嘗試 1：Workflow 模式
+                    wf_payload = {
+                        "workflow_id": resource_id,
+                        "parameters": {
+                            "input": prompt_text,
+                            "product_url": product_url,
+                            "category": category,
+                            "style": style,
+                            "aspect_ratio": aspect_ratio,
+                            "target_audience": target_audience,
+                            "extra_prompt": extra_prompt
+                        }
                     }
                     
-                    # 1. 發起對話請求
-                    start_res = requests.post(
-                        "https://api.coze.cn/v3/chat",
+                    wf_res = requests.post(
+                        f"{api_base}/v1/workflow/run",
                         headers=headers,
-                        json=bot_payload,
-                        timeout=30
+                        json=wf_payload,
+                        timeout=60
                     )
                     
-                    if start_res.status_code == 200:
-                        start_json = start_res.json()
-                        if start_json.get("code") == 0:
-                            chat_data = start_json.get("data", {})
-                            chat_id = chat_data.get("id")
-                            conversation_id = chat_data.get("conversation_id")
-                            
-                            # 2. 輪詢檢查生成狀態 (Polling)
-                            max_retries = 30  # 最多等待 60 秒
-                            completed = False
-                            
-                            for _ in range(max_retries):
-                                time.sleep(2)
-                                status_res = requests.get(
-                                    f"https://api.coze.cn/v3/chat/retrieve?chat_id={chat_id}&conversation_id={conversation_id}",
-                                    headers=headers,
-                                    timeout=15
-                                )
-                                if status_res.status_code == 200:
-                                    status_json = status_res.json()
-                                    status = status_json.get("data", {}).get("status")
-                                    if status == "completed":
-                                        completed = True
-                                        break
-                                    elif status == "failed":
-                                        st.error(f"❌ Coze 內部生成失敗：{status_json.get('data', {}).get('last_error')}")
-                                        break
-                            
-                            # 3. 取得最終生成訊息
-                            if completed:
-                                msg_res = requests.get(
-                                    f"https://api.coze.cn/v3/chat/message/list?chat_id={chat_id}&conversation_id={conversation_id}",
-                                    headers=headers,
-                                    timeout=15
-                                )
-                                if msg_res.status_code == 200:
-                                    msg_json = msg_res.json()
-                                    messages = msg_json.get("data", [])
-                                    output_text = ""
-                                    for msg in messages:
-                                        if msg.get("type") == "answer":
-                                            output_text += msg.get("content", "") + "\n\n"
-                                    
-                                    if output_text:
-                                        st.success("✅ 多樣化影片與文案生成成功！")
-                                        st.markdown("### 📋 AI 生成結果")
-                                        st.markdown(output_text)
-                                    else:
-                                        st.warning("⚠️ 成功完成但未取得文字結果，請檢查 Coze 工作流輸出。")
-                                else:
-                                    st.error("❌ 無法取得生成訊息內容。")
-                            else:
-                                st.error("⏰ 生成處理時間較長，請檢查 Coze 側模型是否設定為高速模型（如 Doubao-pro-32k）。")
-                        else:
-                            st.error(f"❌ Coze API 錯誤 ({start_json.get('code')}): {start_json.get('msg')}")
+                    wf_data = wf_res.json() if wf_res.status_code == 200 else {}
+                    
+                    if wf_res.status_code == 200 and wf_data.get("code") == 0:
+                        st.success("✅ 多樣化影片與文案生成成功！")
+                        st.markdown("### 📋 AI 生成結果")
+                        st.write(wf_data.get("data", wf_data))
                     else:
-                        st.error(f"❌ HTTP 請求失敗：{start_res.status_code}")
-                        st.write(start_res.text)
+                        # 嘗試 2：Bot Chat 模式
+                        bot_payload = {
+                            "bot_id": resource_id,
+                            "user_id": st.session_state.get("username", "user123"),
+                            "stream": False,
+                            "additional_messages": [
+                                {
+                                    "role": "user",
+                                    "content": prompt_text,
+                                    "content_type": "text"
+                                }
+                            ]
+                        }
                         
-                except requests.exceptions.Timeout:
-                    st.error("⏰ 網路請求超時，請重試！")
+                        chat_res = requests.post(
+                            f"{api_base}/v3/chat",
+                            headers=headers,
+                            json=bot_payload,
+                            timeout=30
+                        )
+                        
+                        chat_json = chat_res.json() if chat_res.status_code == 200 else {}
+                        
+                        if chat_res.status_code == 200 and chat_json.get("code") == 0:
+                            chat_id = chat_json.get("data", {}).get("id")
+                            conv_id = chat_json.get("data", {}).get("conversation_id")
+                            
+                            # 輪詢等待生成結果
+                            completed = False
+                            for _ in range(30):
+                                time.sleep(2)
+                                s_res = requests.get(
+                                    f"{api_base}/v3/chat/retrieve?chat_id={chat_id}&conversation_id={conv_id}",
+                                    headers=headers
+                                )
+                                if s_res.status_code == 200 and s_res.json().get("data", {}).get("status") == "completed":
+                                    completed = True
+                                    break
+                            
+                            if completed:
+                                m_res = requests.get(
+                                    f"{api_base}/v3/chat/message/list?chat_id={chat_id}&conversation_id={conv_id}",
+                                    headers=headers
+                                )
+                                if m_res.status_code == 200:
+                                    msgs = m_res.json().get("data", [])
+                                    output = "\n\n".join([m.get("content", "") for m in msgs if m.get("type") == "answer"])
+                                    st.success("✅ 多樣化影片與文案生成成功！")
+                                    st.markdown("### 📋 AI 生成結果")
+                                    st.markdown(output if output else chat_json)
+                            else:
+                                st.error("⏰ 生成逾時，請檢查 Coze 側的模型是否設定為高速模型（如 Doubao-pro-32k）。")
+                        else:
+                            st.error(f"❌ Coze 資源不存在或尚未發布 (ID: {resource_id})")
+                            st.info("💡 檢查小撇步：\n1. 請確認在 Coze 右上角是否有點擊「Publish (發布)」\n2. 如果您使用的是國際版 (coze.com)，請在左側選單切換為 coze.com。")
+                            st.json(chat_json if chat_json else wf_data)
+                            
                 except Exception as e:
                     st.error(f"❌ 發生系統錯誤：{e}")
