@@ -1,4 +1,3 @@
 streamlit
 requests
-streamlit-cookies-manager
-firebase-admin
+supabase
