@@ -100,7 +100,7 @@ with st.sidebar:
     st.divider()
     st.title("⚙️ API 參數設定")
     coze_api_key = st.text_input("Coze API Key:", value=secrets_api_key, type="password")
-    bot_id = st.text_input("Bot ID / Workflow ID:", value=secrets_bot_id)
+    bot_id = st.text_input("Bot ID:", value=secrets_bot_id)
 
 # -----------------------------------------------------------------------------
 # 4. 主頁面：蝦皮多樣化選擇與生成區
@@ -162,35 +162,40 @@ else:
                         "Content-Type": "application/json"
                     }
                     
-                    # 打包選擇的模板參數傳給 Coze 工作流
-                    payload = {
+                    # 針對 Bot 智能體的正確請求內容格式
+                    prompt_text = f"請幫我分析蝦皮商品：{product_url}\n【模板參數】\n- 品類：{category}\n- 風格：{style}\n- 影片比例：{aspect_ratio}\n- 目標受眾：{target_audience}\n- 額外要求：{extra_prompt}"
+                    
+                    bot_payload = {
                         "bot_id": bot_id,
-                        "workflow_id": bot_id,
-                        "parameters": {
-                            "input": product_url,
-                            "url": product_url,
-                            "category": category,
-                            "style": style,
-                            "aspect_ratio": aspect_ratio,
-                            "target_audience": target_audience,
-                            "extra_prompt": extra_prompt
-                        }
+                        "user_id": st.session_state.get("username", "user123"),
+                        "query": prompt_text,
+                        "stream": False
                     }
                     
+                    # 呼叫 Bot API
                     response = requests.post(
-                        "https://api.coze.cn/v1/workflow/run",
+                        "https://api.coze.cn/open_api/v2/chat",
                         headers=headers,
-                        json=payload,
+                        json=bot_payload,
                         timeout=60
                     )
                     
                     if response.status_code == 200:
+                        res_json = response.json()
                         st.success("✅ 多樣化影片與文案生成成功！")
-                        result_data = response.json()
                         
-                        # 顯示生成的結果
-                        st.markdown("### 📋 生成結果")
-                        st.json(result_data)
+                        # 解析 Bot 回傳訊息
+                        messages = res_json.get("messages", [])
+                        output_text = ""
+                        for msg in messages:
+                            if msg.get("type") == "answer":
+                                output_text += msg.get("content", "") + "\n\n"
+                        
+                        if output_text:
+                            st.markdown("### 📋 AI 生成結果")
+                            st.markdown(output_text)
+                        else:
+                            st.json(res_json)
                     else:
                         st.error(f"❌ 生成失敗，錯誤碼：{response.status_code}")
                         st.write(response.text)
