@@ -1,66 +1,89 @@
 import streamlit as st
 import requests
 import json
-import streamlit_authenticator as stauth
 
-# 1. 頁面基本配置
-st.set_page_config(page_title="Coze AI 會員控制台", page_icon="🔐", layout="wide")
+# 頁面配置
+st.set_page_config(page_title="Coze AI 會員系統", page_icon="🔐", layout="wide")
 
-# 2. 設定會員帳號密碼 (可自行修改或新增會員)
-# 格式：'帳號': {'name': '顯示姓名', 'password': '密碼'}
-credentials = {
-    'usernames': {
-        'admin': {
-            'name': 'VIP 會員 A',
-            'password': '123'  # 請修改為你的密碼
-        },
-        'user2': {
-            'name': 'VIP 會員 B',
-            'password': '456'  # 第二組會員密碼
-        }
-    }
-}
+# ==================== 1. 初始化資料庫 (Session 模擬) ====================
+if "user_db" not in st.session_state:
+    # 預設一組管理員帳密：帳號 admin / 密碼 123456
+    st.session_state.user_db = {"admin": "123456"}
 
-# 3. 初始化登入模組
-authenticator = stauth.Authenticate(
-    credentials,
-    'coze_cookie_name',
-    'coze_signature_key',
-    cookie_expiry_days=30
-)
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
 
-# 4. 渲染登入介面
-authenticator.login()
-
-# 5. 判斷登入狀態
-if st.session_state["authentication_status"] is False:
-    st.error("❌ 帳號或密碼錯誤！")
-elif st.session_state["authentication_status"] is None:
-    st.warning("🔒 請先輸入帳號密碼登入系統。")
-elif st.session_state["authentication_status"]:
-    # ==================== 以下為登入成功後的 VIP 區域 ====================
+# ==================== 2. 未登入狀態（登入/註冊 切換） ====================
+if not st.session_state.logged_in:
     
-    # 側邊欄：登出按鈕與 API 設定
+    # 使用 Tab 頁籤切換「登入」與「註冊」
+    tab1, tab2 = st.tabs(["🔑 會員登入", "📝 免費註冊"])
+
+    # --- 頁籤 1：登入 ---
+    with tab1:
+        st.subheader("歡迎回來，請登入")
+        with st.form("login_form"):
+            login_user = st.text_input("帳號")
+            login_pass = st.text_input("密碼", type="password")
+            submit_login = st.form_submit_button("立即登入")
+
+            if submit_login:
+                if login_user in st.session_state.user_db and st.session_state.user_db[login_user] == login_pass:
+                    st.session_state.logged_in = True
+                    st.session_state.username = login_user
+                    st.success("登入成功！正在載入...")
+                    st.rerun()
+                else:
+                    st.error("❌ 帳號或密碼錯誤，或該帳號尚未註冊！")
+
+    # --- 頁籤 2：註冊 ---
+    with tab2:
+        st.subheader("建立新帳號")
+        with st.form("register_form"):
+            reg_user = st.text_input("設定新帳號 (英文/數字)")
+            reg_pass1 = st.text_input("設定密碼", type="password")
+            reg_pass2 = st.text_input("再次確認密碼", type="password")
+            submit_reg = st.form_submit_button("完成註冊")
+
+            if submit_reg:
+                if not reg_user or not reg_pass1:
+                    st.warning("⚠️ 帳號與密碼不能留空！")
+                elif reg_user in st.session_state.user_db:
+                    st.error("❌ 此帳號已被註冊，請換一個帳號名稱！")
+                elif reg_pass1 != reg_pass2:
+                    st.error("❌ 兩次輸入的密碼不一致！")
+                else:
+                    # 將新帳號寫入資料庫
+                    st.session_state.user_db[reg_user] = reg_pass1
+                    st.success("🎉 註冊成功！請切換至「會員登入」頁籤進行登入。")
+
+# ==================== 3. 登入後的 VIP 專區 ====================
+else:
     with st.sidebar:
-        st.write(f"歡迎回來，**{st.session_state['name']}**！")
-        authenticator.logout('登出系統', 'main')
+        st.write(f"👤 會員：**{st.session_state.username}**")
+        if st.button("🚪 登出"):
+            st.session_state.logged_in = False
+            st.session_state.username = ""
+            st.rerun()
+            
         st.markdown("---")
         st.header("⚙️ Coze 參數設定")
-        coze_api_key = st.text_input("輸入 Coze API Key (pat_...):", type="password")
-        bot_id = st.text_input("輸入 Bot ID 或 Workflow ID:")
+        
+        default_key = st.secrets.get("COZE_API_KEY", "")
+        coze_api_key = st.text_input("Coze API Key:", value=default_key, type="password")
+        bot_id = st.text_input("Bot ID / Workflow ID:")
 
     st.title("🤖 Coze AI 專屬會員工作台")
 
-    # 初始化對話歷史紀錄
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # 渲染過往對話
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # 對話輸入處理
     if prompt := st.chat_input("請輸入提示詞 (Prompt)..."):
         if not coze_api_key or not bot_id:
             st.error("❌ 請先在左側欄填寫 API Key 與 Bot ID！")
@@ -80,9 +103,9 @@ elif st.session_state["authentication_status"]:
                 "Content-Type": "application/json"
             }
             payload = {
-                "conversation_id": f"user_{st.session_state['username']}",
+                "conversation_id": f"user_{st.session_state.username}",
                 "bot_id": bot_id,
-                "user": st.session_state['username'],
+                "user": st.session_state.username,
                 "query": prompt,
                 "stream": False
             }
