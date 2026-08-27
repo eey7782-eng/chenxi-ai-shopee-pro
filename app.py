@@ -1,9 +1,18 @@
+import os
+import subprocess
+import sys
+
+# 自動檢查並安裝 edge-tts
+try:
+    import edge_tts
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "edge-tts"])
+    import edge_tts
+
 import streamlit as st
 import sqlite3
 import hashlib
 import asyncio
-import edge_tts
-import os
 
 # --- 1. 資料庫初始化 (SQLite) ---
 def init_db():
