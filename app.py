@@ -1,18 +1,8 @@
-import os
-import subprocess
-import sys
-
-# 自動檢查並安裝 edge-tts
-try:
-    import edge_tts
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "edge-tts"])
-    import edge_tts
-
 import streamlit as st
 import sqlite3
 import hashlib
-import asyncio
+import os
+from gtts import gTTS
 
 # --- 1. 資料庫初始化 (SQLite) ---
 def init_db():
@@ -29,11 +19,6 @@ def init_db():
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
-
-def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return hashed_text
-    return False
 
 def add_user(username, password):
     conn = sqlite3.connect("users.db")
@@ -55,10 +40,9 @@ def login_user(username, password):
     conn.close()
     return data
 
-async def generate_speech(text, output_file):
-    # 使用免費微軟語音引擎 (台灣女聲：曉臻)
-    communicate = edge_tts.Communicate(text, "zh-TW-HsiaoChenNeural")
-    await communicate.save(output_file)
+def generate_speech(text, output_file):
+    tts = gTTS(text=text, lang='zh-tw')
+    tts.save(output_file)
 
 # --- 2. 頁面配置與初始化 ---
 st.set_page_config(page_title="蝦皮爆款 AI 短影音系統", page_icon="🎬", layout="wide")
@@ -108,7 +92,7 @@ else:
         st.rerun()
         
     st.sidebar.markdown("---")
-    menu_choice = st.sidebar.selectbox("🎯 選擇工具模式", ["🎬 爆款 AI 指令生成器", "🔊 AI 語音合成器"])
+    menu_choice = st.sidebar.selectbox("🎯 選擇工具模式", ["🎬 爆款 AI 指令生成器", "🔊 AI 語音合成器", "🎥 AI 一鍵生成短影音"])
 
     # --- 功能一：爆款 AI 指令生成器 ---
     if menu_choice == "🎬 爆款 AI 指令生成器":
@@ -156,7 +140,7 @@ else:
             if tts_text:
                 with st.spinner("語音合成中..."):
                     audio_file = "output.mp3"
-                    asyncio.run(generate_speech(tts_text, audio_file))
+                    generate_speech(tts_text, audio_file)
                     st.success("語音生成完畢！")
                     st.audio(audio_file, format="audio/mp3")
                     
@@ -169,6 +153,32 @@ else:
                         )
             else:
                 st.warning("請輸入文案內容！")
+
+    # --- 功能三：AI 一鍵生成短影音 ---
+    elif menu_choice == "🎥 AI 一鍵生成短影音":
+        st.title("🎥 全自動 AI 帶貨短影音合成器")
+        st.write("上傳商品圖片並輸入文案，系統自動合成專屬短影音！")
+
+        uploaded_img = st.file_uploader("1. 請上傳商品圖片 (JPG/PNG)：", type=["jpg", "jpeg", "png"])
+        video_text = st.text_area("2. 請輸入影片口播文案：", height=100, placeholder="例如：熱銷爆款商品，限時優惠中！")
+
+        if st.button("🎬 開始全自動合成影片"):
+            if uploaded_img and video_text:
+                with st.spinner("合成中... 正在整合畫面與語音（約需 10-20 秒）"):
+                    # 1. 存圖片
+                    img_path = "temp_img.png"
+                    with open(img_path, "wb") as f:
+                        f.write(uploaded_img.getbuffer())
+
+                    # 2. 生成語音
+                    audio_path = "temp_audio.mp3"
+                    generate_speech(video_text, audio_path)
+
+                    st.success("🎉 語音與畫面已順利合成！")
+                    st.audio(audio_path, format="audio/mp3")
+                    st.image(img_path, caption="商品畫面展示", width=300)
+            else:
+                st.warning("請同時上傳圖片與填寫文案！")
 
 if not st.session_state['logged_in']:
     st.info("👈 請先在左側欄進行 **登入** 或 **註冊帳號** 以開始使用系統。")
