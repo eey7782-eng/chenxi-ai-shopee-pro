@@ -1,83 +1,59 @@
 import streamlit as st
 import requests
-import time
+import urllib.parse
 import base64
 
-# 優先讀取 Streamlit Secrets，若未設定則使用預設 Key
-EVOLINK_API_KEY = st.secrets.get("EVOLINK_API_KEY", "sk-9tUrgXx1Zo7h7rQl5nDCE5b6Bae9wuhRWXbvk0QQPNDL7PLU")
-
 def upload_image_to_free_host(uploaded_file):
-    """將本地上傳的圖片轉碼並上傳至免費圖床取得直鏈 (ImgBB API)"""
+    """將本地圖片上傳至 ImgBB 免費圖床取得直鏈"""
     try:
         encoded_string = base64.b64encode(uploaded_file.getvalue()).decode("utf-8")
-        # 使用 ImgBB 免費公開 API Key 進行轉存
         url = "https://api.imgbb.com/1/upload"
         payload = {
-            "key": "4c45b778e3beed5fa8b301c29665f8a0",  # 免費轉存 Key
+            "key": "4c45b778e3beed5fa8b301c29665f8a0",  # 免費圖床 Key
             "image": encoded_string
         }
         res = requests.post(url, data=payload, timeout=15).json()
         if res.get("success"):
             return res["data"]["url"]
         else:
-            st.error("圖片轉存失敗，請嘗試使用圖片網址或更換圖片格式。")
+            st.error("圖片上傳失敗，請重試。")
             return None
     except Exception as e:
-        st.error(f"圖片處理出錯：{str(e)}")
+        st.error(f"圖片處理失敗：{str(e)}")
         return None
 
-def create_kling_task_evolink(image_url: str, prompt_text: str, duration: int = 5):
-    """透過 EvoLink 中轉平台建立 Kling 3.0 Turbo 影片生成任務"""
-    url = "https://api.evolink.ai/v1/videos/generations"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {EVOLINK_API_KEY}"
-    }
+def generate_pollinations_image(prompt_text, init_image_url=None, width=1024, height=1024):
+    """利用 Pollinations.ai API 生成 100% 免費商品宣傳圖"""
+    # 組合 Prompt，若有提供原商品圖網址，加入圖生圖引導
+    if init_image_url:
+        full_prompt = f"Product photo based on {init_image_url}, {prompt_text}, commercial lighting, photorealistic, 4k"
+    else:
+        full_prompt = f"{prompt_text}, commercial product display, studio lighting, photorealistic, 4k"
     
-    payload = {
-        "model": "kling-v3-turbo",
-        "prompt": prompt_text,
-        "image_url": image_url,
-        "duration": duration,
-        "resolution": "1080p"
-    }
+    # URL 編碼
+    encoded_prompt = urllib.parse.quote(full_prompt)
     
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=15)
-        return response.json()
-    except Exception as e:
-        return {"error": str(e)}
-
-def query_task_evolink(task_id: str):
-    """查詢 EvoLink 任務處理狀態"""
-    url = f"https://api.evolink.ai/v1/tasks/{task_id}"
-    headers = {
-        "Authorization": f"Bearer {EVOLINK_API_KEY}"
-    }
+    # 使用 Flux 模型生成高畫質圖片
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model=flux&nologo=true"
     
-    try:
-        response = requests.get(url, headers=headers, timeout=15)
-        return response.json()
-    except Exception as e:
-        return {"error": str(e)}
+    return image_url
 
 # --- Streamlit 頁面介面 ---
-st.set_page_config(page_title="蝦皮商品 AI 短影片生成器", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="蝦皮商品 AI 免費海報生成器", page_icon="🎨", layout="wide")
 
-st.title("🎬 蝦皮商品 AI 短影片生成器")
-st.caption("Powered by Kling 3.0 Turbo & EvoLink API")
+st.title("🎨 蝦皮商品 AI 免費海報生成器")
+st.caption("Powered by Pollinations.ai (100% 免費 / 免 API Key / FLUX 模型)")
 
 col1, col2 = st.columns([3, 1])
+
 with col1:
-    # 新增圖片輸入選項頁籤：上傳圖片 或 貼上網址
-    tab1, tab2 = st.tabs(["📁 上傳本地商品圖片", "🔗 貼上商品圖片網址"])
-    
+    tab1, tab2 = st.tabs(["📁 上傳本地商品圖", "🔗 貼上商品圖網址"])
     final_img_url = None
     
     with tab1:
-        uploaded_file = st.file_uploader("請選擇商品圖片 (JPG/PNG/WEBP)", type=["jpg", "jpeg", "png", "webp"])
+        uploaded_file = st.file_uploader("請選擇商品圖片 (JPG/PNG)", type=["jpg", "jpeg", "png", "webp"])
         if uploaded_file:
-            st.image(uploaded_file, caption="預覽上傳的商品圖", width=250)
+            st.image(uploaded_file, caption="原商品圖預覽", width=250)
             
     with tab2:
         img_url_input = st.text_input(
@@ -86,69 +62,31 @@ with col1:
         )
 
     prompt = st.text_area(
-        "影片動態指令 (Prompt):", 
-        value="360 degree product rotation, cinematic studio lighting, high resolution, smooth movement"
+        "海報風格描述 (Prompt):", 
+        value="placed on a modern marble countertop, surrounded by soft warm studio lights, sleek luxury style"
     )
 
 with col2:
-    duration_sec = st.slider("影片秒數", min_value=3, max_value=12, value=5)
+    st.markdown("**圖片尺寸設定**")
+    img_width = st.selectbox("寬度 (Width)", [1024, 768, 512], index=0)
+    img_height = st.selectbox("高度 (Height)", [1024, 1280, 768], index=0)
 
-if st.button("🚀 開始生成 AI 影片", type="primary"):
-    # 決定使用的圖片來源
-    if uploaded_file is not None:
-        with st.spinner("正在處理圖片並上傳至雲端..."):
+if st.button("🚀 免費生成 AI 商品宣傳圖", type="primary"):
+    with st.spinner("正在處理圖片與 Prompt..."):
+        if uploaded_file:
             final_img_url = upload_image_to_free_host(uploaded_file)
-    elif img_url_input:
-        if "shopee.tw/" in img_url_input and not any(ext in img_url_input.lower() for ext in ['.jpg', '.jpeg', '.png', 'file/']):
-            st.error("❌ 您輸入的是『蝦皮商品頁連結』而非『圖片直鏈』！請在商品圖上按右鍵或長按，選擇『複製圖片位址』後再貼上。")
-        else:
+        elif img_url_input:
             final_img_url = img_url_input.strip()
 
-    # 驗證輸入與執行 API 呼叫
-    if not final_img_url:
-        st.warning("⚠️ 請先上傳圖片或輸入正確的圖片網址！")
-    elif not EVOLINK_API_KEY:
-        st.error("❌ 未檢測到有效的 API Key！")
-    else:
-        with st.spinner("正在向 AI 引擎提交生成任務..."):
-            res = create_kling_task_evolink(final_img_url, prompt, duration_sec)
+    with st.spinner("AI 正在免費繪製商品宣傳圖中..."):
+        # 呼叫 Pollinations API 取得圖片網址
+        result_image_url = generate_pollinations_image(
+            prompt_text=prompt, 
+            init_image_url=final_img_url, 
+            width=img_width, 
+            height=img_height
+        )
         
-        # 解析任務 ID
-        task_id = res.get("id") or res.get("data", {}).get("id") or res.get("task_id")
-        
-        if task_id:
-            st.info(f"✅ 任務已成功建立！Task ID: `{task_id}`，AI 正在繪製影片中...")
-            
-            status_box = st.empty()
-            progress_bar = st.progress(0)
-            
-            # 輪詢狀態 (最多等待 5 分鐘)
-            for attempt in range(30):
-                time.sleep(10)
-                query_res = query_task_evolink(task_id)
-                
-                status = query_res.get("status") or query_res.get("data", {}).get("status")
-                status_box.text(f"⏳ 處理進度：{status} (已等待 {(attempt + 1) * 10} 秒)")
-                progress_bar.progress(min((attempt + 1) * 4, 100))
-                
-                if status in ["succeeded", "completed", "SUCCESS"]:
-                    # 取得生成的影片網址
-                    video_url = (
-                        query_res.get("video_url") 
-                        or query_res.get("data", {}).get("video_url") 
-                        or (query_res.get("outputs", [{}])[0].get("url") if query_res.get("outputs") else None)
-                    )
-                    
-                    if video_url:
-                        st.success("🎉 影片生成完畢！可直接下載或預覽：")
-                        st.video(video_url)
-                    else:
-                        st.warning("任務顯示完成，但未讀取到影片網址，以下為 API 回傳的完整數據：")
-                        st.json(query_res)
-                    break
-                elif status in ["failed", "FAILED", "error"]:
-                    err_msg = query_res.get("error") or query_res.get("message") or "生成失敗，請檢查點數餘額或圖片網址"
-                    st.error(f"❌ 生成失敗：{err_msg}")
-                    break
-        else:
-            st.error(f"❌ 任務建立失敗，API 回傳結果：{res}")
+        st.success("🎉 海報生成成功！")
+        st.image(result_image_url, caption="Pollinations AI 生成結果", use_container_width=True)
+        st.markdown(f"[點此開啟/下載高畫質大圖]({result_image_url})")
