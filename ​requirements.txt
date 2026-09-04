@@ -1,2 +1,5 @@
 streamlit
-edge-tts
+rembg
+pillow
+requests
+onnxruntime
