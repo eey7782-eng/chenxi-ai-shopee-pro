@@ -1,92 +1,92 @@
 import streamlit as st
+from rembg import remove
+from PIL import Image, ImageOps
 import requests
+import io
 import urllib.parse
-import base64
 
-def upload_image_to_free_host(uploaded_file):
-    """將本地圖片上傳至 ImgBB 免費圖床取得直鏈"""
-    try:
-        encoded_string = base64.b64encode(uploaded_file.getvalue()).decode("utf-8")
-        url = "https://api.imgbb.com/1/upload"
-        payload = {
-            "key": "4c45b778e3beed5fa8b301c29665f8a0",  # 免費圖床 Key
-            "image": encoded_string
-        }
-        res = requests.post(url, data=payload, timeout=15).json()
-        if res.get("success"):
-            return res["data"]["url"]
-        else:
-            st.error("圖片上傳失敗，請重試。")
-            return None
-    except Exception as e:
-        st.error(f"圖片處理失敗：{str(e)}")
-        return None
+def remove_bg(input_image):
+    """使用 rembg 進行 AI 商品去背"""
+    return remove(input_image)
 
-def generate_pollinations_image(prompt_text, init_image_url=None, width=1024, height=1024):
-    """利用 Pollinations.ai API 生成 100% 免費商品宣傳圖"""
-    # 組合 Prompt，若有提供原商品圖網址，加入圖生圖引導
-    if init_image_url:
-        full_prompt = f"Product photo based on {init_image_url}, {prompt_text}, commercial lighting, photorealistic, 4k"
-    else:
-        full_prompt = f"{prompt_text}, commercial product display, studio lighting, photorealistic, 4k"
+def make_white_bg(fg_image, target_size=(1000, 1000)):
+    """針對 酷澎 / momo 生成標準純白底圖"""
+    fg_image = fg_image.convert("RGBA")
     
-    # URL 編碼
-    encoded_prompt = urllib.parse.quote(full_prompt)
+    # 建立純白背景畫布
+    bg = Image.new("RGBA", target_size, (255, 255, 255, 255))
     
-    # 使用 Flux 模型生成高畫質圖片
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model=flux&nologo=true"
+    # 計算商品等比例縮放 (留白 10% 避免貼邊)
+    max_w, max_h = int(target_size[0] * 0.8), int(target_size[1] * 0.8)
+    fg_image.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
     
-    return image_url
-
-# --- Streamlit 頁面介面 ---
-st.set_page_config(page_title="蝦皮商品 AI 免費海報生成器", page_icon="🎨", layout="wide")
-
-st.title("🎨 蝦皮商品 AI 免費海報生成器")
-st.caption("Powered by Pollinations.ai (100% 免費 / 免 API Key / FLUX 模型)")
-
-col1, col2 = st.columns([3, 1])
-
-with col1:
-    tab1, tab2 = st.tabs(["📁 上傳本地商品圖", "🔗 貼上商品圖網址"])
-    final_img_url = None
+    # 將商品居中貼上
+    x = (target_size[0] - fg_image.width) // 2
+    y = (target_size[1] - fg_image.height) // 2
+    bg.paste(fg_image, (x, y), mask=fg_image)
     
-    with tab1:
-        uploaded_file = st.file_uploader("請選擇商品圖片 (JPG/PNG)", type=["jpg", "jpeg", "png", "webp"])
-        if uploaded_file:
-            st.image(uploaded_file, caption="原商品圖預覽", width=250)
+    return bg.convert("RGB")
+
+def make_ai_scene_bg(fg_image, prompt_text, target_size=(1024, 1024)):
+    """針對 蝦皮 生成 AI 情境背景並進行合成"""
+    encoded_prompt = urllib.parse.quote(f"empty studio background, {prompt_text}, soft lighting, highly detailed, no objects in center")
+    bg_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={target_size[0]}&height={target_size[1]}&model=flux&nologo=true"
+    
+    # 下載 AI 背景圖
+    res = requests.get(bg_url, timeout=15)
+    bg_image = Image.open(io.BytesIO(res.content)).convert("RGBA")
+    
+    # 等比例縮放商品並合成至 AI 背景圖中央
+    fg_image = fg_image.convert("RGBA")
+    max_w, max_h = int(target_size[0] * 0.75), int(target_size[1] * 0.75)
+    fg_image.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+    
+    x = (target_size[0] - fg_image.width) // 2
+    y = (target_size[1] - fg_image.height) // 2
+    bg_image.paste(fg_image, (x, y), mask=fg_image)
+    
+    return bg_image.convert("RGB")
+
+# --- UI 介面設定 ---
+st.set_page_config(page_title="多平台商品圖自動生成器", page_icon="🛍️", layout="wide")
+
+st.title("🛍️ 酷澎 / 蝦皮 / momo 電商主圖自動生成器")
+st.caption("商品 100% 不變形 | 純白底去背 + AI 情境背景合成")
+
+uploaded_file = st.file_uploader("請上傳原始商品照 (PNG/JPG)", type=["jpg", "png", "jpeg", "webp"])
+
+if uploaded_file:
+    raw_img = Image.open(uploaded_file)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.image(raw_img, caption="原始上傳照片", use_container_width=True)
+    
+    platform = st.radio("請選擇目標上架平台：", ["酷澎 / momo (合規純白底圖)", "蝦皮 (AI 高清情境宣傳圖)"])
+    
+    prompt = ""
+    if "蝦皮" in platform:
+        prompt = st.text_input("輸入情境背景描述 (Prompt)：", value="modern wooden table, blurred indoor living room background, warm sunlight")
+
+    if st.button("🚀 開始自動生成主圖", type="primary"):
+        with st.spinner("1/2 正在進行 AI 自動商品去背..."):
+            nobg_img = remove_bg(raw_img)
             
-    with tab2:
-        img_url_input = st.text_input(
-            "商品圖片直鏈 (HTTP/HTTPS):", 
-            placeholder="https://cf.shopee.tw/file/sg-11134201-xxxxx.jpg"
-        )
-
-    prompt = st.text_area(
-        "海報風格描述 (Prompt):", 
-        value="placed on a modern marble countertop, surrounded by soft warm studio lights, sleek luxury style"
-    )
-
-with col2:
-    st.markdown("**圖片尺寸設定**")
-    img_width = st.selectbox("寬度 (Width)", [1024, 768, 512], index=0)
-    img_height = st.selectbox("高度 (Height)", [1024, 1280, 768], index=0)
-
-if st.button("🚀 免費生成 AI 商品宣傳圖", type="primary"):
-    with st.spinner("正在處理圖片與 Prompt..."):
-        if uploaded_file:
-            final_img_url = upload_image_to_free_host(uploaded_file)
-        elif img_url_input:
-            final_img_url = img_url_input.strip()
-
-    with st.spinner("AI 正在免費繪製商品宣傳圖中..."):
-        # 呼叫 Pollinations API 取得圖片網址
-        result_image_url = generate_pollinations_image(
-            prompt_text=prompt, 
-            init_image_url=final_img_url, 
-            width=img_width, 
-            height=img_height
-        )
-        
-        st.success("🎉 海報生成成功！")
-        st.image(result_image_url, caption="Pollinations AI 生成結果", use_container_width=True)
-        st.markdown(f"[點此開啟/下載高畫質大圖]({result_image_url})")
+        with st.spinner("2/2 正在排版與合成平台規格..."):
+            if "酷澎" in platform:
+                result_img = make_white_bg(nobg_img)
+            else:
+                result_img = make_ai_scene_bg(nobg_img, prompt)
+                
+        with col2:
+            st.image(result_img, caption="生成結果 (已符合平台規範)", use_container_width=True)
+            
+            # 提供直接下載按鈕
+            buf = io.BytesIO()
+            result_img.save(buf, format="JPEG", quality=95)
+            st.download_button(
+                label="📥 下載符合規範的主圖",
+                data=buf.getvalue(),
+                file_name="product_main_image.jpg",
+                mime="image/jpeg"
+            )
