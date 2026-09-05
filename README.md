@@ -1,1 +1,2 @@
-# chenxi-ai-shopee-pro
+pip install -r requirements.txt
+streamlit run app.py
