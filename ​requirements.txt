@@ -1,5 +1,7 @@
-streamlit
+fastapi
+uvicorn
+python-multipart
 rembg
 pillow
 requests
-onnxruntime
+google-genai
