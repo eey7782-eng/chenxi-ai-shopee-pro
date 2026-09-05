@@ -1,92 +1,192 @@
-import streamlit as st
-from rembg import remove
-from PIL import Image, ImageOps
-import requests
 import io
+import time
 import urllib.parse
+import zipfile
+import requests
+from enum import Enum
+from typing import Optional, List
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import Response
+from PIL import Image, ImageEnhance, ImageFilter
+from rembg import remove
+from google import genai
+from google.genai import types
+import uvicorn
 
-def remove_bg(input_image):
-    """使用 rembg 進行 AI 商品去背"""
-    return remove(input_image)
+# ==========================================
+# 🔑 金鑰設定區 (請在此處填入你的 API Key)
+# ==========================================
+GEMINI_API_KEY = "你的_GEMINI_API_KEY"
+SILICONFLOW_API_KEY = "你的_SILICONFLOW_API_KEY"
 
-def make_white_bg(fg_image, target_size=(1000, 1000)):
-    """針對 酷澎 / momo 生成標準純白底圖"""
-    fg_image = fg_image.convert("RGBA")
-    
-    # 建立純白背景畫布
-    bg = Image.new("RGBA", target_size, (255, 255, 255, 255))
-    
-    # 計算商品等比例縮放 (留白 10% 避免貼邊)
-    max_w, max_h = int(target_size[0] * 0.8), int(target_size[1] * 0.8)
-    fg_image.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
-    
-    # 將商品居中貼上
-    x = (target_size[0] - fg_image.width) // 2
-    y = (target_size[1] - fg_image.height) // 2
-    bg.paste(fg_image, (x, y), mask=fg_image)
-    
-    return bg.convert("RGB")
+# 初始化 Gemini Client (使用最新 google-genai SDK)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
-def make_ai_scene_bg(fg_image, prompt_text, target_size=(1024, 1024)):
-    """針對 蝦皮 生成 AI 情境背景並進行合成"""
-    encoded_prompt = urllib.parse.quote(f"empty studio background, {prompt_text}, soft lighting, highly detailed, no objects in center")
-    bg_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={target_size[0]}&height={target_size[1]}&model=flux&nologo=true"
-    
-    # 下載 AI 背景圖
-    res = requests.get(bg_url, timeout=15)
-    bg_image = Image.open(io.BytesIO(res.content)).convert("RGBA")
-    
-    # 等比例縮放商品並合成至 AI 背景圖中央
-    fg_image = fg_image.convert("RGBA")
-    max_w, max_h = int(target_size[0] * 0.75), int(target_size[1] * 0.75)
-    fg_image.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
-    
-    x = (target_size[0] - fg_image.width) // 2
-    y = (target_size[1] - fg_image.height) // 2
-    bg_image.paste(fg_image, (x, y), mask=fg_image)
-    
-    return bg_image.convert("RGB")
+app = FastAPI(
+    title="多平台電商 AI 自動化 API 服務",
+    description="整合 Gemini 邏輯分析與 SiliconFlow 生成模型，提供白底去背、AI 海報與短影音生成服務",
+    version="2.0.0"
+)
 
-# --- UI 介面設定 ---
-st.set_page_config(page_title="多平台商品圖自動生成器", page_icon="🛍️", layout="wide")
+class PlatformEnum(str, Enum):
+    coupang = "coupang"
+    momo = "momo"
+    shopee = "shopee"
 
-st.title("🛍️ 酷澎 / 蝦皮 / momo 電商主圖自動生成器")
-st.caption("商品 100% 不變形 | 純白底去背 + AI 情境背景合成")
+class ECommerceService:
+    @staticmethod
+    def enhance_product(img: Image.Image) -> Image.Image:
+        """提升商品邊緣銳利度"""
+        enhancer = ImageEnhance.Sharpness(img)
+        return enhancer.enhance(1.2)
 
-uploaded_file = st.file_uploader("請上傳原始商品照 (PNG/JPG)", type=["jpg", "png", "jpeg", "webp"])
+    @staticmethod
+    def generate_shadow(fg_mask: Image.Image, blur_radius=15, opacity=85) -> Image.Image:
+        """產生自然接觸陰影"""
+        shadow = fg_mask.split()[-1].filter(ImageFilter.GaussianBlur(blur_radius))
+        shadow_img = Image.new("RGBA", fg_mask.size, (0, 0, 0, 0))
+        shadow_img.putalpha(shadow)
+        alpha = shadow_img.split()[-1]
+        alpha = alpha.point(lambda p: int(p * (opacity / 255.0)))
+        shadow_img.putalpha(alpha)
+        return shadow_img
 
-if uploaded_file:
-    raw_img = Image.open(uploaded_file)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.image(raw_img, caption="原始上傳照片", use_container_width=True)
-    
-    platform = st.radio("請選擇目標上架平台：", ["酷澎 / momo (合規純白底圖)", "蝦皮 (AI 高清情境宣傳圖)"])
-    
-    prompt = ""
-    if "蝦皮" in platform:
-        prompt = st.text_input("輸入情境背景描述 (Prompt)：", value="modern wooden table, blurred indoor living room background, warm sunlight")
+    @classmethod
+    def build_white_bg(cls, fg_img: Image.Image, canvas_size=(1000, 1000)) -> Image.Image:
+        """酷澎 / momo 專用：1000x1000 純白底 (80% 商品占比居中)"""
+        canvas = Image.new("RGBA", canvas_size, (255, 255, 255, 255))
+        max_dim = int(canvas_size[0] * 0.8)
+        fg_copy = fg_img.copy()
+        fg_copy.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+        x = (canvas_size[0] - fg_copy.width) // 2
+        y = (canvas_size[1] - fg_copy.height) // 2
+        canvas.paste(fg_copy, (x, y), mask=fg_copy)
+        return canvas.convert("RGB")
 
-    if st.button("🚀 開始自動生成主圖", type="primary"):
-        with st.spinner("1/2 正在進行 AI 自動商品去背..."):
-            nobg_img = remove_bg(raw_img)
+    @classmethod
+    def generate_siliconflow_bg(cls, prompt: str, canvas_size=(1024, 1024)) -> Image.Image:
+        """使用 SiliconFlow (FLUX.1) 生成高質感 AI 背景圖"""
+        url = "https://api.siliconflow.cn/v1/image/generations"
+        headers = {
+            "Authorization": f"Bearer {SILICONFLOW_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "black-forest-labs/FLUX.1-schnell",
+            "prompt": f"empty background, empty studio table, {prompt}, soft studio lighting, highly detailed, photorealistic, no objects in center",
+            "width": canvas_size[0],
+            "height": canvas_size[1]
+        }
+        
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=30)
+            data = res.json()
+            image_url = data["images"][0]["url"]
+            img_res = requests.get(image_url, timeout=20)
+            return Image.open(io.BytesIO(img_res.content)).convert("RGBA")
+        except Exception as e:
+            # 備用機制：若 API 異常則使用 Pollinations 免費繪圖
+            encoded_prompt = urllib.parse.quote(prompt)
+            fallback_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={canvas_size[0]}&height={canvas_size[1]}&model=flux&nologo=true"
+            bg_res = requests.get(fallback_url, timeout=20)
+            return Image.open(io.BytesIO(bg_res.content)).convert("RGBA")
+
+    @classmethod
+    def build_shopee_ai_bg(cls, fg_img: Image.Image, prompt: str, canvas_size=(1024, 1024)) -> Image.Image:
+        """蝦皮專用：AI 背景 + 自動陰影疊加合成"""
+        bg = cls.generate_siliconflow_bg(prompt, canvas_size)
+        max_dim = int(canvas_size[0] * 0.7)
+        fg_copy = fg_img.copy()
+        fg_copy.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+
+        shadow = cls.generate_shadow(fg_copy, blur_radius=20, opacity=85)
+        x = (canvas_size[0] - fg_copy.width) // 2
+        y = (canvas_size[1] - fg_copy.height) // 2
+
+        bg.paste(shadow, (x, y + 10), mask=shadow)
+        bg.paste(fg_copy, (x, y), mask=fg_copy)
+        return bg.convert("RGB")
+
+    @classmethod
+    def analyze_image_and_get_prompt(cls, img_bytes: bytes) -> str:
+        """呼叫 Gemini Vision API 分析商品，並自動生成最適合的背景 Prompt"""
+        try:
+            image = Image.open(io.BytesIO(img_bytes))
+            prompt_text = "Analyze this product image. Output a 1-sentence English prompt for generating a matching background scene for e-commerce, such as table material and lighting. Only output the English prompt."
             
-        with st.spinner("2/2 正在排版與合成平台規格..."):
-            if "酷澎" in platform:
-                result_img = make_white_bg(nobg_img)
-            else:
-                result_img = make_ai_scene_bg(nobg_img, prompt)
-                
-        with col2:
-            st.image(result_img, caption="生成結果 (已符合平台規範)", use_container_width=True)
-            
-            # 提供直接下載按鈕
-            buf = io.BytesIO()
-            result_img.save(buf, format="JPEG", quality=95)
-            st.download_button(
-                label="📥 下載符合規範的主圖",
-                data=buf.getvalue(),
-                file_name="product_main_image.jpg",
-                mime="image/jpeg"
+            response = gemini_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=[image, prompt_text]
             )
+            return response.text.strip()
+        except Exception:
+            return "modern wooden table, soft warm studio sunlight, blurred background"
+
+# --- API 端點 ---
+
+@app.post("/api/v1/process-image", summary="單張商品圖處理")
+async def process_image(
+    file: UploadFile = File(..., description="商品照片 (JPG/PNG)"),
+    platform: PlatformEnum = Form(..., description="上架平台 (coupang / momo / shopee)"),
+    custom_prompt: Optional[str] = Form(None, description="可選：自訂蝦皮背景描述 (留空將由 Gemini 自動分析生成)")
+):
+    contents = await file.read()
+    raw_img = Image.open(io.BytesIO(contents)).convert("RGBA")
+    nobg_img = remove(raw_img)
+    nobg_img = ECommerceService.enhance_product(nobg_img)
+
+    if platform in [PlatformEnum.coupang, PlatformEnum.momo]:
+        result_img = ECommerceService.build_white_bg(nobg_img)
+    elif platform == PlatformEnum.shopee:
+        # 若未指定 prompt，則由 Gemini 自動辨識商品並產生
+        prompt = custom_prompt or ECommerceService.analyze_image_and_get_prompt(contents)
+        result_img = ECommerceService.build_shopee_ai_bg(nobg_img, prompt)
+
+    output_buffer = io.BytesIO()
+    result_img.save(output_buffer, format="JPEG", quality=95)
+    
+    return Response(
+        content=output_buffer.getvalue(),
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f"inline; filename={platform.value}_output.jpg"}
+    )
+
+@app.post("/api/v1/process-batch-zip", summary="批次處理圖片並回傳 ZIP 壓縮檔")
+async def process_batch_zip(
+    files: List[UploadFile] = File(..., description="上傳多張圖片"),
+    platform: PlatformEnum = Form(..., description="目標平台")
+):
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for idx, file in enumerate(files):
+            if not file.content_type.startswith("image/"):
+                continue
+            try:
+                contents = await file.read()
+                raw_img = Image.open(io.BytesIO(contents)).convert("RGBA")
+                nobg_img = remove(raw_img)
+                nobg_img = ECommerceService.enhance_product(nobg_img)
+
+                if platform in [PlatformEnum.coupang, PlatformEnum.momo]:
+                    res_img = ECommerceService.build_white_bg(nobg_img)
+                else:
+                    prompt = ECommerceService.analyze_image_and_get_prompt(contents)
+                    res_img = ECommerceService.build_shopee_ai_bg(nobg_img, prompt)
+
+                out_buf = io.BytesIO()
+                res_img.save(out_buf, format="JPEG", quality=95)
+                
+                orig_name = file.filename.split(".")[0] if file.filename else f"product_{idx+1}"
+                zip_file.writestr(f"{platform.value}_{orig_name}.jpg", out_buf.getvalue())
+            except Exception as e:
+                zip_file.writestr(f"ERROR_{file.filename}.txt", str(e))
+
+    zip_buffer.seek(0)
+    return Response(
+        content=zip_buffer.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={platform.value}_batch.zip"}
+    )
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
