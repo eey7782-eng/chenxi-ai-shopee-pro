@@ -5,3 +5,4 @@ rembg
 pillow
 requests
 google-genai
+streamlit
