@@ -1,1068 +1,477 @@
-# ============================================================
-# 黑金剛 AI 多 AI 總控中心 PRO
-# VERSION 3.0 NO-API
-# 手機相簿穩定整合版
-# ============================================================
-
 import io
+import os
 import re
 import json
+import uuid
 import hashlib
-import secrets
 from pathlib import Path
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 
 import streamlit as st
 from PIL import Image, ImageOps
 
-
-# ============================================================
-# 基本設定
-# ============================================================
-
-APP_NAME = "黑金剛 AI 多 AI 總控中心 PRO"
-APP_VERSION = "3.0 NO-API"
-
+APP_NAME = "黑金剛 AI 多 AI 電商總控中心 PRO"
+APP_VERSION = "4.0 FINAL"
 DATA_DIR = Path("data")
 MEDIA_DIR = DATA_DIR / "media"
 HISTORY_DIR = DATA_DIR / "history"
-
 MEMBERS_FILE = DATA_DIR / "members.json"
 PRODUCTS_FILE = DATA_DIR / "products.json"
-HISTORY_FILE = DATA_DIR / "history.json"
+ORDERS_FILE = DATA_DIR / "orders.json"
 
-MAX_IMAGE_MB = 20
 MAX_IMAGE_SIZE = 1600
-
-DEFAULT_MEMBER_DAYS = 30
-
+MAX_IMAGE_MB = 20
+GEMINI_MODELS = ["gemini-3.7-flash", "gemini-3-flash-preview", "gemini-2.5-flash"]
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin123"
 
+PAGES = [
+    "🏠 Dashboard", "🤖 AI Agent 總控", "🛒 商品上架工作台", "📦 商品管理",
+    "🧾 訂單管理", "📊 數據分析", "💰 利潤／蝦皮分潤", "🎬 TikTok 短影音",
+    "🖼️ AI 圖片素材", "🎥 即夢 AI 2.5", "📚 AI 素材庫", "🕘 歷史紀錄",
+    "👥 會員／管理中心", "⚙️ AI 設定"
+]
 
-# ============================================================
-# 建立資料夾
-# ============================================================
-
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-
-
-# ============================================================
-# Streamlit 設定
-# ============================================================
-
-st.set_page_config(
-    page_title=APP_NAME,
-    page_icon="🖤",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-
-# ============================================================
-# CSS
-# ============================================================
-
-st.markdown(
-    """
-<style>
-
-html, body, [class*="css"] {
-    font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+AGENTS = {
+    "🧠 總控 Agent": "任務拆解、Agent 路由、結果整合",
+    "🔍 商品視覺分析 Agent": "商品圖片分析與真實性約束",
+    "🛒 蝦皮上架 Agent": "標題、描述、規格、賣點、關鍵字",
+    "💰 定價 Agent": "成本、售價、平台費、利潤",
+    "📦 商品管理 Agent": "商品資料、庫存與狀態",
+    "📊 電商數據 Agent": "訂單、營收、成本、毛利分析",
+    "💵 分潤 Agent": "平台費、廣告費、其他成本",
+    "✍️ 文案 Agent": "商品、促銷、廣告文案",
+    "🔥 行銷 Agent": "促銷與轉換角度",
+    "🎯 SEO Agent": "搜尋關鍵字與標題優化",
+    "🎬 TikTok Agent": "Hook、腳本、CTA",
+    "🎥 短影音導演 Agent": "分鏡、鏡位、運鏡、節奏",
+    "🧩 即夢 Agent": "即夢 AI 2.5 Prompt",
+    "🖼️ 圖片 Agent": "主圖、介紹圖、廣告圖 Prompt",
+    "📱 社群 Agent": "TikTok、IG、FB 內容",
+    "🛍️ 選品 Agent": "商品定位與賣點",
+    "👤 消費者 Agent": "目標客群與購買動機",
+    "🧠 競品 Agent": "競品比較與差異化角度",
+    "📢 廣告 Agent": "廣告素材與文案方向",
+    "💬 客服 Agent": "FAQ 與客服話術",
+    "📝 評價 Agent": "評價優缺點整理",
+    "🔄 內容再利用 Agent": "一份資料轉多平台內容",
+    "📚 知識 Agent": "商品知識與 Prompt 規則",
+    "🗂️ 素材管理 Agent": "素材分類與版本",
+    "🕘 歷史 Agent": "任務與 AI 產出保存",
+    "🔌 AI 路由 Agent": "Gemini／DeepSeek／Ollama 等路由",
+    "🧪 品質檢查 Agent": "格式與內容品質檢查",
+    "🛡️ 真實性 Agent": "防止捏造品牌、規格、功效",
+    "📋 工作流 Agent": "多步驟任務串接",
 }
 
-.stApp {
-    background:
-        radial-gradient(circle at top right, rgba(255, 193, 7, 0.08), transparent 30%),
-        radial-gradient(circle at bottom left, rgba(255, 193, 7, 0.05), transparent 30%),
-        #090909;
-    color: #f5f5f5;
-}
-
-section[data-testid="stSidebar"] {
-    background: #0d0d0d;
-    border-right: 1px solid rgba(255, 193, 7, 0.18);
-}
-
-.bk-hero {
-    padding: 28px;
-    border-radius: 20px;
-    background:
-        linear-gradient(135deg, #171717, #0c0c0c);
-    border: 1px solid rgba(255, 193, 7, 0.25);
-    box-shadow: 0 10px 35px rgba(0,0,0,.35);
-    margin-bottom: 22px;
-}
-
-.bk-title {
-    font-size: 24px;
-    font-weight: 800;
-    margin-bottom: 12px;
-}
-
-.bk-subtitle {
-    color: #bbbbbb;
-    font-size: 14px;
-    line-height: 1.7;
-}
-
-.bk-card {
-    padding: 20px;
-    border-radius: 18px;
-    background: rgba(22,22,22,.92);
-    border: 1px solid rgba(255,193,7,.16);
-    margin-bottom: 18px;
-}
-
-.bk-big {
-    font-size: 34px;
-    font-weight: 900;
-}
-
-.bk-small {
-    color: #999;
-    font-size: 13px;
-}
-
-.bk-tag {
-    display: inline-block;
-    padding: 5px 11px;
-    border-radius: 999px;
-    background: rgba(255,193,7,.10);
-    color: #ffc107;
-    border: 1px solid rgba(255,193,7,.25);
-    font-size: 12px;
-    margin-right: 5px;
-}
-
-.bk-success {
-    padding: 12px 15px;
-    border-radius: 12px;
-    background: rgba(0, 200, 120, .08);
-    border: 1px solid rgba(0, 200, 120, .20);
-}
-
-.bk-warning {
-    padding: 12px 15px;
-    border-radius: 12px;
-    background: rgba(255, 193, 7, .08);
-    border: 1px solid rgba(255, 193, 7, .20);
-}
-
-.bk-danger {
-    padding: 12px 15px;
-    border-radius: 12px;
-    background: rgba(255, 60, 60, .08);
-    border: 1px solid rgba(255, 60, 60, .20);
-}
-
-div[data-testid="stMetric"] {
-    background: #141414;
-    border: 1px solid rgba(255,193,7,.12);
-    padding: 12px;
-    border-radius: 14px;
-}
-
-.stButton > button {
-    border-radius: 12px;
-    min-height: 42px;
-    font-weight: 700;
-}
-
-.stDownloadButton > button {
-    border-radius: 12px;
-    font-weight: 700;
-}
-
-textarea {
-    line-height: 1.65 !important;
-}
-
-</style>
-""",
-    unsafe_allow_html=True,
-)
+TRUTH_RULE = """商品圖片是唯一視覺真實來源。不得自行捏造或補全圖片中不可確認的品牌、Logo、包裝、文字、顏色、材質、規格、容量、成分、功效、認證或數字。若無法確認，必須標示『無法由圖片確認』。"""
 
 
-# ============================================================
-# JSON 工具
-# ============================================================
+def ensure_dirs():
+    for p in (DATA_DIR, MEDIA_DIR, HISTORY_DIR):
+        p.mkdir(parents=True, exist_ok=True)
+
 
 def load_json(path, default):
     try:
-        if not path.exists():
-            return default
-
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return default
+        pass
+    return default
 
 
 def save_json(path, data):
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(
-                data,
-                f,
-                ensure_ascii=False,
-                indent=2,
-            )
-        return True
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    except Exception:
-        return False
-
-
-# ============================================================
-# 安全工具
-# ============================================================
 
 def hash_password(password):
-    return hashlib.sha256(
-        str(password).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
-def safe_filename(text):
-    text = str(text or "file")
-
-    text = re.sub(
-        r"[^A-Za-z0-9\u4e00-\u9fff_-]+",
-        "_",
-        text,
-    )
-
-    text = text.strip("_")
-
-    if not text:
-        text = "file"
-
-    return text[:80]
-
-
-# ============================================================
-# 初始化資料
-# ============================================================
-
-def init_data():
-
-    members = load_json(MEMBERS_FILE, {})
-
-    if not isinstance(members, dict):
-        members = {}
-
-    if ADMIN_USERNAME not in members:
-
-        members[ADMIN_USERNAME] = {
-            "password": hash_password(ADMIN_PASSWORD),
-            "role": "admin",
-            "expires": "2099-12-31",
-            "created": datetime.now().isoformat(),
-        }
-
+def init_members():
+    members = load_json(MEMBERS_FILE, [])
+    if not any(x.get("username") == ADMIN_USERNAME for x in members):
+        members.append({"username": ADMIN_USERNAME, "password": hash_password("admin123"), "role": "admin", "expires": "2099-12-31"})
         save_json(MEMBERS_FILE, members)
-
-    if not PRODUCTS_FILE.exists():
-        save_json(PRODUCTS_FILE, [])
-
-    if not HISTORY_FILE.exists():
-        save_json(HISTORY_FILE, [])
+    return members
 
 
-init_data()
+def process_image(uploaded):
+    raw = uploaded.getvalue()
+    if len(raw) > MAX_IMAGE_MB * 1024 * 1024:
+        raise ValueError(f"圖片超過 {MAX_IMAGE_MB} MB")
+    img = Image.open(io.BytesIO(raw))
+    img = ImageOps.exif_transpose(img).convert("RGB")
+    img.thumbnail((MAX_IMAGE_SIZE, MAX_IMAGE_SIZE))
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=92)
+    return img, out.getvalue()
 
 
-# ============================================================
-# Session State
-# ============================================================
-
-DEFAULT_SESSION = {
-    "logged_in": False,
-    "user": "",
-    "role": "member",
-    "page": "Dashboard",
-    "last_product": {},
-    "generated_prompt": "",
-    "gemini_model": "",
-    "gemini_error": "",
-}
-
-for key, value in DEFAULT_SESSION.items():
-
-    if key not in st.session_state:
-        st.session_state[key] = value
-
-
-# ============================================================
-# 會員
-# ============================================================
-
-def is_expired(member):
-
-    if member.get("role") == "admin":
-        return False
-
-    expires = member.get("expires", "")
-
-    if not expires:
-        return True
-
+def get_api_key():
     try:
-        expire_date = datetime.strptime(
-            expires,
-            "%Y-%m-%d",
-        ).date()
-
-        return date.today() > expire_date
-
+        key = st.secrets.get("GEMINI_API_KEY", "")
     except Exception:
-        return True
+        key = ""
+    return key or os.getenv("GEMINI_API_KEY", "")
 
 
-def login_user(username, password):
+def gemini_generate(prompt, image_bytes=None):
+    key = get_api_key()
+    if not key:
+        return None, "尚未設定 GEMINI_API_KEY，已切換本地模板模式。"
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=key)
+        contents = [prompt]
+        if image_bytes:
+            contents.append(types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"))
+        last_error = ""
+        for model in GEMINI_MODELS:
+            try:
+                response = client.models.generate_content(model=model, contents=contents)
+                text = getattr(response, "text", None)
+                if text:
+                    st.session_state["gemini_model"] = model
+                    return text, None
+            except Exception as e:
+                last_error = str(e)
+        return None, f"Gemini 呼叫失敗：{last_error}"
+    except Exception as e:
+        return None, f"Gemini SDK 尚未可用：{e}"
 
-    members = load_json(MEMBERS_FILE, {})
 
-    if username not in members:
-        return False, "帳號不存在"
-
-    member = members[username]
-
-    if member.get("password") != hash_password(password):
-        return False, "密碼錯誤"
-
-    if is_expired(member):
-        return False, "會員期限已到期"
-
-    st.session_state.logged_in = True
-    st.session_state.user = username
-    st.session_state.role = member.get(
-        "role",
-        "member",
-    )
-
-    return True, "登入成功"
-
-
-def register_user(username, password):
-
-    username = username.strip()
-
-    if len(username) < 3:
-        return False, "帳號至少 3 個字"
-
-    if len(password) < 6:
-        return False, "密碼至少 6 個字"
-
-    members = load_json(MEMBERS_FILE, {})
-
-    if username in members:
-        return False, "帳號已存在"
-
-    expire_date = date.today() + timedelta(
-        days=DEFAULT_MEMBER_DAYS
-    )
-
-    members[username] = {
-        "password": hash_password(password),
-        "role": "member",
-        "expires": expire_date.strftime("%Y-%m-%d"),
-        "created": datetime.now().isoformat(),
+def detect_category(name):
+    groups = {
+        "保養美妝": ["洗面", "乳液", "精華", "面膜", "香水", "化妝", "保養"],
+        "3C": ["手機", "耳機", "充電", "鍵盤", "滑鼠", "電腦", "平板"],
+        "食品": ["芭樂", "零食", "餅乾", "水果", "茶", "咖啡", "食品"],
+        "居家生活": ["清潔", "收納", "杯", "鍋", "家居", "居家"],
+        "服飾": ["衣", "褲", "鞋", "帽", "包", "服飾"],
+        "汽機車": ["汽車", "機車", "車用", "輪胎"],
     }
-
-    if not save_json(MEMBERS_FILE, members):
-        return False, "會員資料保存失敗"
-
-    return True, "註冊成功"
-
-
-# ============================================================
-# 歷史紀錄
-# ============================================================
-
-def add_history(kind, title, content):
-
-    history = load_json(HISTORY_FILE, [])
-
-    if not isinstance(history, list):
-        history = []
-
-    history.insert(
-        0,
-        {
-            "id": secrets.token_hex(8),
-            "time": datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S"
-            ),
-            "user": st.session_state.get(
-                "user",
-                "",
-            ),
-            "kind": kind,
-            "title": title,
-            "content": content,
-        },
-    )
-
-    history = history[:500]
-
-    save_json(
-        HISTORY_FILE,
-        history,
-    )
-
-
-# ============================================================
-# 商品
-# ============================================================
-
-def save_product(data):
-
-    products = load_json(
-        PRODUCTS_FILE,
-        [],
-    )
-
-    if not isinstance(products, list):
-        products = []
-
-    item = {
-        "name": data.get(
-            "name",
-            "",
-        ),
-        "category": data.get(
-            "category",
-            "其他",
-        ),
-        "price": int(
-            data.get(
-                "price",
-                0,
-            )
-        ),
-        "points": data.get(
-            "points",
-            "",
-        ),
-        "seconds": int(
-            data.get(
-                "seconds",
-                15,
-            )
-        ),
-        "image_path": "",
-        "image_name": data.get(
-            "image_name",
-            "",
-        ),
-        "id": secrets.token_hex(8),
-        "created": datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "user": st.session_state.get(
-            "user",
-            "",
-        ),
-    }
-
-    # ========================================================
-    # 重要：
-    # 只有使用者按「儲存商品」後才真正處理圖片
-    # 不在 file_uploader rerun 時寫檔
-    # ========================================================
-
-    image_bytes = data.get(
-        "image_bytes",
-        b"",
-    )
-
-    if image_bytes:
-
-        try:
-
-            if len(image_bytes) <= MAX_IMAGE_MB * 1024 * 1024:
-
-                image = Image.open(
-                    io.BytesIO(image_bytes)
-                )
-
-                image = ImageOps.exif_transpose(
-                    image
-                )
-
-                if (
-                    image.width > MAX_IMAGE_SIZE
-                    or image.height > MAX_IMAGE_SIZE
-                ):
-                    image.thumbnail(
-                        (
-                            MAX_IMAGE_SIZE,
-                            MAX_IMAGE_SIZE,
-                        )
-                    )
-
-                if image.mode != "RGB":
-                    image = image.convert("RGB")
-
-                filename = (
-                    safe_filename(
-                        item["name"]
-                        or "product"
-                    )
-                    + "_"
-                    + datetime.now().strftime(
-                        "%Y%m%d%H%M%S"
-                    )
-                    + "_"
-                    + secrets.token_hex(3)
-                    + ".jpg"
-                )
-
-                image_path = MEDIA_DIR / filename
-
-                image.save(
-                    image_path,
-                    "JPEG",
-                    quality=90,
-                    optimize=True,
-                )
-
-                item["image_path"] = str(
-                    image_path
-                )
-
-        except Exception:
-            item["image_path"] = ""
-
-    products.insert(
-        0,
-        item,
-    )
-
-    save_json(
-        PRODUCTS_FILE,
-        products,
-    )
-
-    st.session_state.last_product = item
-
-    return item
-
-
-def delete_product(product_id):
-
-    products = load_json(
-        PRODUCTS_FILE,
-        [],
-    )
-
-    if not isinstance(products, list):
-        products = []
-
-    new_products = [
-        p
-        for p in products
-        if p.get("id") != product_id
-    ]
-
-    save_json(
-        PRODUCTS_FILE,
-        new_products,
-    )
-
-
-# ============================================================
-# 商品分類
-# ============================================================
-
-def detect_product_category(text):
-
-    text = str(text or "").lower()
-
-    categories = {
-
-        "食品": [
-            "芭樂",
-            "水果",
-            "零食",
-            "餅乾",
-            "茶",
-            "咖啡",
-            "食品",
-            "肉乾",
-            "堅果",
-            "糖",
-            "果乾",
-        ],
-
-        "保養美妝": [
-            "洗面",
-            "乳液",
-            "精華",
-            "面膜",
-            "防曬",
-            "洗髮",
-            "保養",
-            "香水",
-            "化妝",
-            "美容",
-        ],
-
-        "3C": [
-            "手機",
-            "平板",
-            "耳機",
-            "充電",
-            "鍵盤",
-            "滑鼠",
-            "電腦",
-            "3c",
-            "充電器",
-            "usb",
-        ],
-
-        "居家生活": [
-            "清潔",
-            "收納",
-            "杯",
-            "鍋",
-            "家居",
-            "居家",
-            "用品",
-            "廚房",
-        ],
-
-        "服飾": [
-            "衣",
-            "褲",
-            "鞋",
-            "襪",
-            "包",
-            "帽",
-            "服飾",
-            "外套",
-        ],
-
-        "汽機車": [
-            "汽車",
-            "機車",
-            "車用",
-            "行車記錄器",
-            "輪胎",
-            "汽配",
-        ],
-    }
-
-    for category, words in categories.items():
-
-        for word in words:
-
-            if word in text:
-                return category
-
+    for cat, words in groups.items():
+        if any(w in name for w in words):
+            return cat
     return "其他"
 
 
-# ============================================================
-# 手機相簿穩定版商品表單
-# ============================================================
+def local_analysis(name, category, price, points):
+    return f"""商品名稱：{name}\n分類：{category}\n售價：{price}\n賣點：{points or '未提供'}\n\n分析：此商品應以圖片可確認資訊為主，未能確認的規格不可自行補寫。建議主打清楚、可信、易理解的購買理由。\n\n真實性規則：{TRUTH_RULE}"""
 
-def product_form(prefix="main"):
 
-    st.markdown(
-        '<div class="bk-card">',
-        unsafe_allow_html=True,
-    )
+def local_shopee(name, category, price, points):
+    return f"""【蝦皮商品標題】\n{name}｜{category}｜高轉換商品關鍵字\n\n【商品描述】\n{points or '請依商品圖片確認實際特色。'}\n\n【購買重點】\n1. 以實際商品圖片為準\n2. 未確認規格不自行承諾\n3. 下單前確認商品資訊\n\n【關鍵字】\n{name}、{category}、網購、熱門商品\n\n【價格】\nNT${price:,.0f}\n\n{TRUTH_RULE}"""
 
-    st.markdown(
-        '<div class="bk-title">📦 商品資料</div>',
-        unsafe_allow_html=True,
-    )
 
-    name = st.text_input(
-        "商品名稱",
-        placeholder=(
-            "例如：甘草芭樂、UNO洗面乳、藍牙耳機"
-        ),
-        key=f"{prefix}_name",
-    )
+def local_tiktok(name, points):
+    return f"""【TikTok 9:16 短影音腳本】\n商品：{name}\n\n0-3秒 Hook：\n「如果你正在找{name}，先看這裡！」\n\n3-8秒：商品近景與細節展示。\n\n8-15秒：依圖片能確認的特色逐一展示。\n\n15-20秒 CTA：\n「喜歡就收藏／查看商品頁，實際資訊以商品頁為準。」\n\n賣點參考：{points or '以實際圖片可確認內容為準。'}\n\n畫面比例：9:16\n禁止：改變商品外觀、品牌、包裝、Logo 或文字。"""
 
-    auto_category = detect_product_category(
-        name
-    )
 
-    categories = [
-        "食品",
-        "保養美妝",
-        "3C",
-        "居家生活",
-        "服飾",
-        "汽機車",
-        "其他",
-    ]
+def local_jimeng(name, points, scene="高級商業產品攝影"):
+    return f"""即夢 AI 2.5 商品影片 Prompt\n\n主體：使用上傳的「{name}」商品原圖作為唯一視覺來源。\n場景：{scene}。\n鏡頭：慢速電影感推近、微幅環繞、自然景深、乾淨高級商業攝影。\n內容：展示商品本身與圖片中可確認的細節。\n比例：9:16 直式短影音。\n\n硬性要求：{TRUTH_RULE}\n\n不可：重新設計商品、替換包裝、修改 Logo、改變品牌文字、增加不存在的配件、虛構規格或功效。\n賣點參考：{points or '只使用圖片可確認資訊。'}"""
 
-    default_index = (
-        categories.index(auto_category)
-        if auto_category in categories
-        else 6
-    )
 
-    category = st.selectbox(
-        "商品分類",
-        categories,
-        index=default_index,
-        key=f"{prefix}_category",
-    )
+def save_history(kind, payload):
+    ensure_dirs()
+    item = {"id": uuid.uuid4().hex[:10], "time": datetime.now().isoformat(timespec="seconds"), "kind": kind, "data": payload}
+    path = HISTORY_DIR / f"{datetime.now():%Y%m%d_%H%M%S}_{item['id']}.json"
+    save_json(path, item)
 
-    col1, col2 = st.columns(2)
 
-    with col1:
+def ai_agent_task(task, product, selected_agents):
+    name = product.get("name", "商品")
+    category = product.get("category", "其他")
+    price = product.get("price", 0)
+    points = product.get("points", "")
+    prompt = f"""你是黑金剛 AI 多 AI 電商總控中心的 Agent。\n任務：{task}\n商品：{name}\n分類：{category}\n售價：{price}\n賣點：{points}\n啟用 Agent：{', '.join(selected_agents)}\n\n{TRUTH_RULE}\n請以繁體中文輸出可直接使用的結果，未知資訊請明確標示。"""
+    text, err = gemini_generate(prompt, product.get("image_bytes"))
+    if text:
+        return text, "Gemini"
+    if "蝦皮" in task:
+        return local_shopee(name, category, price, points), "Local"
+    if "TikTok" in task or "短影音" in task:
+        return local_tiktok(name, points), "Local"
+    if "即夢" in task:
+        return local_jimeng(name, points), "Local"
+    return local_analysis(name, category, price, points), "Local"
 
-        price = st.number_input(
-            "商品售價",
-            min_value=0,
-            value=999,
-            step=1,
-            key=f"{prefix}_price",
-        )
 
-    with col2:
+def inject_css():
+    st.markdown("""<style>
+    .main-title{font-size:2rem;font-weight:800;margin-bottom:.2rem}.sub{opacity:.75}
+    .agent-card{border:1px solid rgba(128,128,128,.25);padding:12px;border-radius:14px;margin:6px 0}
+    .truth{padding:12px;border-radius:12px;background:rgba(255,180,0,.10);border:1px solid rgba(255,180,0,.35)}
+    @media (max-width:700px){.main-title{font-size:1.45rem}}
+    </style>""", unsafe_allow_html=True)
 
-        seconds = st.selectbox(
-            "TikTok 影片秒數",
-            [15, 30, 60],
-            index=0,
-            key=f"{prefix}_seconds",
-        )
 
-    points = st.text_area(
-        "商品賣點",
-        placeholder=(
-            "輸入已確認的商品資訊。\n"
-            "例如：容量、材質、功能、口味、尺寸、特色等。\n"
-            "沒有資料的部分，AI 不得自行編造。"
-        ),
-        height=140,
-        key=f"{prefix}_points",
-    )
-
-    st.markdown(
-        "### 📷 商品原圖"
-    )
-
-    st.caption(
-        "手機／平板點擊下面按鈕後，可選擇相簿中的照片。"
-    )
-
-    # ========================================================
-    # 核心穩定設定
-    #
-    # 不使用 capture
-    # 不立即寫入 MEDIA_DIR
-    # 不立即轉 JPG
-    # 不立即 resize
-    # ========================================================
-
-    uploaded = st.file_uploader(
-        "選擇商品照片",
-        type=[
-            "jpg",
-            "jpeg",
-            "png",
-            "webp",
-        ],
-        accept_multiple_files=False,
-        key=f"{prefix}_image",
-        help="手機可從照片／相簿選擇商品圖片。",
-    )
-
-    image_bytes = b""
-    image_name = ""
-
-    if uploaded is not None:
-
-        try:
-
-            raw = uploaded.getvalue()
-
-            if len(raw) > MAX_IMAGE_MB * 1024 * 1024:
-
-                st.error(
-                    f"圖片太大："
-                    f"{len(raw) / 1024 / 1024:.1f} MB。"
-                    f"請選擇 {MAX_IMAGE_MB} MB 以下的照片。"
-                )
-
+def login_page():
+    st.title(APP_NAME)
+    st.caption(APP_VERSION)
+    with st.form("login"):
+        u = st.text_input("帳號")
+        p = st.text_input("密碼", type="password")
+        if st.form_submit_button("登入", use_container_width=True):
+            members = init_members()
+            user = next((x for x in members if x.get("username") == u and x.get("password") == hash_password(p)), None)
+            if user:
+                st.session_state.logged_in = True
+                st.session_state.user = user
+                st.rerun()
             else:
-
-                image_bytes = raw
-                image_name = uploaded.name
-
-                st.markdown(
-                    "#### 🖼️ 已選擇商品照片"
-                )
-
-                # =================================================
-                # 這裡只預覽，不保存檔案
-                # =================================================
-
-                st.image(
-                    image_bytes,
-                    width=320,
-                )
-
-                st.success(
-                    f"已選擇：{image_name}"
-                )
-
-                st.caption(
-                    "圖片目前只存在本次操作中；"
-                    "按「💾 儲存商品」後才會保存到商品資料。"
-                )
-
-        except Exception:
-
-            image_bytes = b""
-            image_name = ""
-
-            st.error(
-                "圖片讀取失敗，請重新選擇照片。"
-            )
-
-    st.markdown(
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-    return {
-        "name": name.strip(),
-        "category": category,
-        "price": int(price),
-        "points": points.strip(),
-        "seconds": int(seconds),
-        "image_bytes": image_bytes,
-        "image_name": image_name,
-    }
-
-
-# ============================================================
-# 商品上下文
-# ============================================================
-
-def product_context(data):
-
-    name = data.get(
-        "name",
-        "",
-    )
-
-    category = data.get(
-        "category",
-        "其他",
-    )
-
-    price = data.get(
-        "price",
-        0,
-    )
-
-    points = data.get(
-        "points",
-        "",
-    )
-
-    image_name = data.get(
-        "image_name",
-        "",
-    )
-
-    return f"""
-【商品資料】
-
-商品名稱：
-{name or "未提供"}
-
-商品分類：
-{category}
-
-商品售價：
-{price}
-
-已確認商品賣點：
-{points or "未提供"}
-
-商品原圖：
-{image_name or "未提供"}
-
-【最高優先級規則】
-
-1. 只能使用使用者提供的商品資料。
-2. 商品圖片是唯一視覺來源。
-3. 不得自行編造品牌。
-4. 不得自行編造型號。
-5. 不得自行編造容量。
-6. 不得自行編造尺寸。
-7. 不得自行編造材質。
-8. 不得自行編造功能。
-9. 不得自行編造功效。
-10. 不得自行編造認證。
-11. 不得自行編造產地。
-12. 不得自行編造保固。
-13. 不得自行編造包裝文字。
-14. 不得自行編造價格。
-15. 不得自行編造折扣。
-16. 不得自行編造庫存。
-17. 不得自行編造物流資訊。
-18. 不得自行編造「熱賣」「人氣」「限時優惠」等事實。
-19. 圖片看不到的資訊不得自行猜測。
-20. 無法確認的內容必須標示：
-   「無法確認，請人工確認」。
-
-【圖片一致性】
-
-如果需要產生圖片或影片 Prompt：
-
-- 商品外型保持一致
-- 顏色保持一致
-- 包裝保持一致
-- 品牌保持一致
-- Logo 保持一致
-- 商品文字保持一致
-- 標籤保持一致
-- 不增加不存在的配件
-- 不改變商品結構
-- 不重新設計包裝
-"""
-
-
-# ============================================================
-# Shopee 文案
-# ============================================================
-
-def generate_shopee_copy(data):
-
-    name = data.get(
-        "name",
-        "",
-    )
-
-    category = data.get(
-        "category",
-        "其他",
-    )
-
-    points = data.get(
-        "points",
-        "",
-    )
-
-    confirmed_points = (
-        points
-        if points
-        else "請依商品實際資訊補充"
-    )
-
-    title_1 = (
-        f"{name}｜{category}｜商品介紹"
-        if name
-        else f"{category}｜商品介紹"
-    )
-
-    title_2 = (
-        f"{name}｜{category}｜特色整理"
-        if name
-        else f"{category}｜特色整理"
-    )
-
-    title_3 = (
-        f"{name}｜{category}｜商品資訊"
-        if name
-        else f"{category}｜商品資訊"
-    )
-
-    keywords = [
-        name,
-        category,
-    ]
-
-    if points:
-
-        for part in re.split(
-            r"[,，、\n]",
-            points,
-        ):
-
-            part = part.strip()
-
-            if part:
-                keywords.append(part[:20])
-
-    keywords = [
-        x
-        for x in keywords
-        if x
-    ]
-
-    keyword_text = "、".join(
-        dict.fromkeys(keywords)
-    )
-
-    return f"""
-# 🛒 蝦皮商品上架文案
-
-## 一、商品標題候選
-
-1. {title_1}
-2. {title_2}
-3. {title_3}
-
-## 二、商品分類
-
-{category}
-
-## 三、商品已確認資訊
-
-{confirmed_points}
-
-## 四、商品介紹
-
-商品名稱：{name or "未提供"}
-
-本商品介紹內容只根據目前提供的商品資訊整理。
-沒有提供的規格、功能、品牌、產地、容量、尺寸或功效，
-不得自行補充。
-
-## 五、關鍵字方向
-
-{keyword_text or "請人工確認關鍵字"}
-
-## 六、上架前人工確認
-
-□ 品牌
-□ 型號
-□ 規格
-□ 尺寸
-□ 容量
-□ 材質
-□ 產地
-□ 保固
-□ 商品圖片
-□ 商品價格
-□ 庫存
-□ 物流
-□ 促銷活動
-
-⚠️ 以上未確認項目不可直接當成商品事實。
-"""
-
-
-# ============================================================
-# TikTok 腳本
-# ============================================================
-
-def generate_tiktok(data):
+                st.error("帳號或密碼錯誤")
+    st.info("首次管理員：admin / admin123；登入後請自行修改程式中的管理方式或資料。")
+
+
+def sidebar():
+    st.sidebar.title("🖤 黑金剛 PRO")
+    st.sidebar.caption(f"{APP_VERSION}｜Multi-AI Agent")
+    page = st.sidebar.radio("功能中心", PAGES)
+    st.sidebar.markdown("---")
+    st.sidebar.caption(f"目前：{st.session_state.get('user', {}).get('username', 'Guest')}")
+    if st.sidebar.button("登出", use_container_width=True):
+        st.session_state.clear()
+        st.rerun()
+    return page
+
+
+def product_form():
+    st.subheader("📷 商品資料")
+    uploaded = st.file_uploader("從手機相簿／平板選擇商品圖片", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=False)
+    name = st.text_input("商品名稱", value=st.session_state.get("last_name", ""))
+    category = st.selectbox("商品分類", ["自動判斷", "保養美妝", "3C", "食品", "居家生活", "服飾", "汽機車", "其他"])
+    price = st.number_input("售價", min_value=0.0, value=float(st.session_state.get("last_price", 999)))
+    points = st.text_area("你已知的賣點／補充資訊")
+    image = None
+    image_bytes = None
+    if uploaded:
+        try:
+            image, image_bytes = process_image(uploaded)
+            st.image(image, caption="商品原圖", use_container_width=True)
+        except Exception as e:
+            st.error(str(e))
+    final_category = detect_category(name) if category == "自動判斷" else category
+    return {"name": name, "category": final_category, "price": price, "points": points, "image_bytes": image_bytes, "image": image}
+
+
+def dashboard():
+    st.markdown(f'<div class="main-title">{APP_NAME}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub">一張商品圖 → 多 AI → 多 Agent → 電商內容工作流</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="truth">🛡️ <b>核心真實性規則</b><br>{TRUTH_RULE}</div>', unsafe_allow_html=True)
+    products = load_json(PRODUCTS_FILE, [])
+    orders = load_json(ORDERS_FILE, [])
+    c1,c2,c3,c4 = st.columns(4)
+    c1.metric("商品", len(products)); c2.metric("訂單", len(orders)); c3.metric("AI Agents", len(AGENTS)); c4.metric("版本", APP_VERSION)
+    st.subheader("⚡ 快速工作流")
+    st.write("📷 上傳商品 → 🔍 分析 → 🛒 蝦皮 → 🎬 TikTok → 🧩 即夢 → 🖼️ 圖片 → 📊 利潤 → 🗂️ 素材庫")
+
+
+def agent_center():
+    st.header("🤖 AI Agent 多代理總控中心")
+    st.caption("不是單一聊天機器人，而是可選 Agent 協作的電商工作流。")
+    cols = st.columns(2)
+    selected = []
+    for i, (agent, desc) in enumerate(AGENTS.items()):
+        with cols[i % 2]:
+            if st.checkbox(agent, value=agent in ["🧠 總控 Agent", "🔍 商品視覺分析 Agent", "🧪 品質檢查 Agent"], key=f"agent_{i}"):
+                selected.append(agent)
+            st.caption(desc)
+    st.markdown("---")
+    task = st.text_area("告訴總控 Agent 你要完成什麼", value="把這個商品做成蝦皮商品頁＋TikTok 9:16 腳本＋即夢影片 Prompt＋AI 圖片 Prompt")
+    product = product_form()
+    if st.button("🚀 啟動多 Agent 工作流", type="primary", use_container_width=True):
+        if not product["name"]:
+            st.warning("請先輸入商品名稱")
+            return
+        with st.spinner("AI Agent 正在執行工作流…"):
+            result, source = ai_agent_task(task, product, selected)
+        st.success(f"完成｜來源：{source}")
+        st.text_area("Agent 最終結果", result, height=520)
+        save_history("AI Agent", {"task": task, "agents": selected, "product": {k:v for k,v in product.items() if k not in ["image", "image_bytes"]}, "result": result, "source": source})
+
+
+def workspace():
+    st.header("🛒 商品上架工作台")
+    product = product_form()
+    if st.button("✨ 一鍵產生完整商品包", type="primary", use_container_width=True):
+        if not product["name"]:
+            st.warning("請輸入商品名稱")
+            return
+        analysis, src1 = ai_agent_task("進行商品分析", product, ["🔍 商品視覺分析 Agent", "🛡️ 真實性 Agent"])
+        shopee, src2 = ai_agent_task("建立蝦皮商品頁", product, ["🛒 蝦皮上架 Agent", "✍️ 文案 Agent", "🎯 SEO Agent"])
+        tiktok, src3 = ai_agent_task("建立 TikTok 短影音", product, ["🎬 TikTok Agent", "🎥 短影音導演 Agent"])
+        jimeng, src4 = ai_agent_task("建立即夢 AI 影片 Prompt", product, ["🧩 即夢 Agent", "🛡️ 真實性 Agent"])
+        st.session_state["last_bundle"] = {"analysis":analysis,"shopee":shopee,"tiktok":tiktok,"jimeng":jimeng}
+        for title, text in [("🔍 商品分析",analysis),("🛒 蝦皮",shopee),("🎬 TikTok",tiktok),("🧩 即夢",jimeng)]:
+            st.subheader(title); st.text_area(title, text, height=280, key="out_"+title)
+        save_history("商品完整包", st.session_state["last_bundle"])
+
+
+def products_page():
+    st.header("📦 商品管理")
+    products = load_json(PRODUCTS_FILE, [])
+    with st.form("product_add"):
+        name = st.text_input("商品名稱")
+        category = st.text_input("分類")
+        price = st.number_input("售價", min_value=0.0)
+        cost = st.number_input("成本", min_value=0.0)
+        stock = st.number_input("庫存", min_value=0, step=1)
+        if st.form_submit_button("新增商品"):
+            if name:
+                products.append({"id": uuid.uuid4().hex[:8], "name": name, "category": category, "price": price, "cost": cost, "stock": stock, "created": datetime.now().isoformat(timespec="seconds")})
+                save_json(PRODUCTS_FILE, products); st.success("已新增"); st.rerun()
+    if products:
+        st.dataframe(products, use_container_width=True)
+    else:
+        st.info("尚無商品")
+
+
+def orders_page():
+    st.header("🧾 訂單管理")
+    orders = load_json(ORDERS_FILE, [])
+    with st.form("order_add"):
+        product = st.text_input("商品")
+        qty = st.number_input("數量", min_value=1, value=1)
+        sale = st.number_input("單價", min_value=0.0)
+        cost = st.number_input("單件成本", min_value=0.0)
+        fee = st.number_input("平台／分潤費", min_value=0.0)
+        ad = st.number_input("廣告費", min_value=0.0)
+        other = st.number_input("其他成本", min_value=0.0)
+        if st.form_submit_button("新增訂單"):
+            revenue = qty * sale; total_cost = qty * cost + fee + ad + other; profit = revenue - total_cost
+            orders.append({"date": str(date.today()), "product": product, "qty": qty, "revenue": revenue, "cost": total_cost, "profit": profit})
+            save_json(ORDERS_FILE, orders); st.success("已新增")
+    if orders: st.dataframe(orders, use_container_width=True)
+
+
+def analytics_page():
+    st.header("📊 數據分析")
+    orders = load_json(ORDERS_FILE, [])
+    revenue = sum(float(x.get("revenue",0)) for x in orders)
+    cost = sum(float(x.get("cost",0)) for x in orders)
+    profit = revenue - cost
+    a,b,c = st.columns(3); a.metric("營收", f"NT${revenue:,.0f}"); b.metric("成本", f"NT${cost:,.0f}"); c.metric("利潤", f"NT${profit:,.0f}")
+    if revenue: st.metric("利潤率", f"{profit/revenue*100:.1f}%")
+
+
+def profit_page():
+    st.header("💰 利潤／蝦皮分潤計算器")
+    sale = st.number_input("售價", min_value=0.0, value=999.0)
+    cost = st.number_input("商品成本", min_value=0.0, value=400.0)
+    platform = st.number_input("平台費／分潤", min_value=0.0)
+    ad = st.number_input("廣告費", min_value=0.0)
+    shipping = st.number_input("運費／其他", min_value=0.0)
+    profit = sale-cost-platform-ad-shipping
+    st.metric("預估利潤", f"NT${profit:,.0f}")
+    st.metric("利潤率", f"{profit/sale*100:.1f}%" if sale else "0%")
+
+
+def tiktok_page():
+    st.header("🎬 TikTok 短影音中心")
+    product = product_form()
+    if st.button("🎬 產生 TikTok 9:16 套件", type="primary", use_container_width=True):
+        result, src = ai_agent_task("建立 TikTok 9:16 短影音腳本、Hook、分鏡、CTA", product, ["🎬 TikTok Agent", "🎥 短影音導演 Agent", "📱 社群 Agent"])
+        st.text_area("TikTok 套件", result, height=550)
+        save_history("TikTok", {"product": product["name"], "result": result, "source": src})
+
+
+def image_page():
+    st.header("🖼️ AI 圖片素材 Agent")
+    product = product_form()
+    target = st.selectbox("圖片用途", ["蝦皮 1:1 主圖", "商品介紹圖 1:1", "商品廣告圖 4:5", "TikTok 9:16"])
+    if st.button("產生圖片 Prompt", type="primary", use_container_width=True):
+        prompt = f"為商品『{product['name']}』產生{target}圖片生成 Prompt。只可使用商品圖片可確認資訊。{TRUTH_RULE}"
+        text, err = gemini_generate(prompt, product.get("image_bytes"))
+        if not text: text = f"{target} 商業攝影 Prompt：以商品原圖為唯一來源，保持商品完整一致，乾淨背景、高級商業攝影、清晰細節。\n{TRUTH_RULE}"
+        st.text_area("圖片 Prompt", text, height=400)
+
+
+def jimeng_page():
+    st.header("🎥 即夢 AI 2.5 Agent")
+    product = product_form()
+    scene = st.text_input("影片風格／場景", "高級商業產品攝影棚")
+    if st.button("🧩 產生即夢 Prompt", type="primary", use_container_width=True):
+        prompt = f"產生即夢 AI 2.5 商品影片 Prompt。商品：{product['name']}；場景：{scene}；賣點：{product['points']}。比例9:16。{TRUTH_RULE}"
+        text, err = gemini_generate(prompt, product.get("image_bytes"))
+        if not text: text = local_jimeng(product["name"], product["points"], scene)
+        st.text_area("即夢 AI 2.5 Prompt", text, height=500)
+        st.info("本中心產生 Prompt，不直接呼叫影片生成 API。")
+
+
+def materials_page():
+    st.header("📚 AI 素材庫")
+    files = sorted(HISTORY_DIR.glob("*.json"), reverse=True)
+    if not files:
+        st.info("尚無素材／歷史紀錄")
+        return
+    for f in files[:30]:
+        data = load_json(f, {})
+        with st.expander(f"{data.get('time','')}｜{data.get('kind','素材')}"):
+            st.json(data.get("data", {}))
+
+
+def history_page():
+    st.header("🕘 歷史紀錄")
+    files = sorted(HISTORY_DIR.glob("*.json"), reverse=True)
+    for f in files[:50]:
+        data = load_json(f, {})
+        st.write(f"**{data.get('time','')}** — {data.get('kind','')}")
+
+
+def members_page():
+    st.header("👥 會員／管理中心")
+    if st.session_state.get("user", {}).get("role") != "admin":
+        st.warning("只有管理員可以使用")
+        return
+    members = init_members()
+    st.dataframe(members, use_container_width=True)
+    with st.form("member"):
+        u = st.text_input("新會員帳號")
+        p = st.text_input("新會員密碼", type="password")
+        expires = st.date_input("到期日", value=date(2099,12,31))
+        if st.form_submit_button("建立會員"):
+            if u and p and not any(x.get("username") == u for x in members):
+                members.append({"username":u,"password":hash_password(p),"role":"member","expires":str(expires)})
+                save_json(MEMBERS_FILE,members); st.success("建立成功"); st.rerun()
+
+
+def settings_page():
+    st.header("⚙️ AI 設定")
+    key = get_api_key()
+    st.write("Gemini API 狀態：", "🟢 已設定" if key else "🟡 未設定／使用本地模式")
+    st.caption("建議在 Streamlit Cloud → Settings → Secrets 設定 GEMINI_API_KEY。")
+    st.write("模型優先順序：", " → ".join(GEMINI_MODELS))
+    st.markdown("### 多 AI 架構")
+    st.write("Gemini：主力視覺／文字 AI；DeepSeek、Ollama 等可在後續加入對應連接器。沒有 API 時仍可使用本地模板工作流。")
+
+
+def main():
+    ensure_dirs(); init_members()
+    for k,v in {"logged_in":False,"user":None,"gemini_model":""}.items():
+        if k not in st.session_state: st.session_state[k]=v
+    st.set_page_config(page_title=APP_NAME, page_icon="🖤", layout="wide", initial_sidebar_state="expanded")
+    inject_css()
+    if not st.session_state.logged_in:
+        login_page(); return
+    page = sidebar()
+    if page == "🏠 Dashboard": dashboard()
+    elif page == "🤖 AI Agent 總控": agent_center()
+    elif page == "🛒 商品上架工作台": workspace()
+    elif page == "📦 商品管理": products_page()
+    elif page == "🧾 訂單管理": orders_page()
+    elif page == "📊 數據分析": analytics_page()
+    elif page == "💰 利潤／蝦皮分潤": profit_page()
+    elif page == "🎬 TikTok 短影音": tiktok_page()
+    elif page == "🖼️ AI 圖片素材": image_page()
+    elif page == "🎥 即夢 AI 2.5": jimeng_page()
+    elif page == "📚 AI 素材庫": materials_page()
+    elif page == "🕘 歷史紀錄": history_page()
+    elif page == "👥 會員／管理中心": members_page()
+    elif page == "⚙️ AI 設定": settings_page()
+
+
+if __name__ == "__main__":
+    main()
