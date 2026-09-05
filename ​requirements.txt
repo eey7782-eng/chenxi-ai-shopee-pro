@@ -1,4 +1,6 @@
+streamlit
 openai
 playwright
 pillow
 requests
+google-genai
