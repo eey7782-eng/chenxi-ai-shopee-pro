@@ -1,8 +1,16 @@
 import os
+import sys
 import subprocess
+
+# 強制自動安裝 openai 套件
+try:
+    import openai
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "openai", "streamlit"])
+    import openai
+
 import streamlit as st
 from openai import OpenAI
-
 # 頁面標題與佈局設定
 st.set_page_config(page_title="蝦皮 AI 自動化上架系統", layout="wide")
 
