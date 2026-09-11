@@ -3,12 +3,19 @@ import json
 import time
 import hashlib
 import tempfile
+import requests
 import streamlit as st
+
+# ---------------------------------------------------------------------------
+# 0. 可靈 (Kling) AI API 專屬設定
+# ---------------------------------------------------------------------------
+KLING_API_KEY = "9N8ka4iMwM8APWDcjTfq7QblW9vUjCexNLMJtPNOkrY"
+KLING_BASE_URL = "https://api-singapore.klingai.com"  # 依官方海外/新加坡代理節點調整
 
 # ---------------------------------------------------------------------------
 # 1. 頁面設定與會員資料庫 (JSON 持久化)
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="蝦皮 AI 全自動上架與多規格系統", layout="wide")
+st.set_page_config(page_title="蝦皮 AI 全自動上架與可靈系統", layout="wide")
 
 USER_DB_FILE = "users.json"
 
@@ -107,7 +114,7 @@ def login_system():
 login_system()
 
 if not st.session_state["logged_in"]:
-    st.title("🛒 蝦皮 AI 全自動上架系統")
+    st.title("🛒 蝦皮 AI 全自動上架與可靈系統")
     st.info("🔒 本系統僅限會員使用，請先在左側邊欄進行 **「會員登入」** 或 **「註冊新會員」**。")
     st.stop()
 
@@ -123,16 +130,15 @@ try:
 except ImportError:
     HAS_MEDIA_TOOLS = False
 
-st.title("🛒 蝦皮 AI 全自動上架與多規格管理系統 Pro")
-st.caption(f"使用者：【{st.session_state['username']}】｜支援蝦皮多規格選項設定與圖片轉動態短影片。")
+st.title("🛒 蝦皮 AI 全自動上架與可靈 AI 整合系統 Pro")
+st.caption(f"使用者：【{st.session_state['username']}】｜內建可靈 API 協議，支援帶貨短影片智慧生成。")
 
 # ---------------------------------------------------------------------------
-# 4. 文案與影片生成 Logic (整合規格資料)
+# 4. 文案與影片生成 Logic (整合規格與可靈 API 呼叫)
 # ---------------------------------------------------------------------------
 def generate_copywriting(name, category, price, features, spec1_name, spec1_options, spec2_name, spec2_options):
     feature_list = "\n".join([f"✨ {f.strip()}" for f in features.split("\n") if f.strip()])
     
-    # 組裝規格文字 block
     spec_text = ""
     if spec1_name and spec1_options:
         spec_text += f"\n🎨【{spec1_name}】：{spec1_options}"
@@ -196,6 +202,30 @@ def generate_local_fallback_video(image_files):
     except Exception as e:
         return None, str(e)
 
+def call_kling_video_api(prompt_text):
+    """
+    透過可靈 API 提交帶貨短影片生成任務
+    """
+    headers = {
+        "Authorization": f"Bearer {KLING_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "kling-v1",
+        "prompt": prompt_text,
+        "duration": 5,
+        "mode": "standard",
+        "aspect_ratio": "9:16"
+    }
+    try:
+        response = requests.post(f"{KLING_BASE_URL}/v1/videos/generations", headers=headers, json=payload, timeout=15)
+        if response.status_code == 200:
+            return response.json(), None
+        else:
+            return None, f"API 回應代碼 {response.status_code}: {response.text}"
+    except Exception as e:
+        return None, str(e)
+
 # ---------------------------------------------------------------------------
 # 5. 主介面 UI 設計
 # ---------------------------------------------------------------------------
@@ -235,6 +265,7 @@ with col1:
         accept_multiple_files=True
     )
 
+    use_kling_api = st.checkbox("🚀 同步啟動「可靈 AI API」雲端影片生成引擎", value=True)
     btn_generate = st.button("🚀 開始 AI 文案與影片生成", type="primary")
 
 with col2:
@@ -251,6 +282,7 @@ with col2:
                 )
                 st.session_state['copywriting_result'] = result_text
 
+                # 本地影片合成
                 if uploaded_images:
                     out_video_path, err = generate_local_fallback_video(uploaded_images)
                     if not err and out_video_path:
@@ -258,11 +290,24 @@ with col2:
                 else:
                     st.warning("請上傳圖片以自動生成動態短影片！")
 
+                # 可靈 API 雲端生成排程
+                if use_kling_api:
+                    kling_prompt = f"Professional commercial video for {p_name}, high-end presentation, 8k raw texture, vertical 9:16, smooth motion."
+                    api_res, api_err = call_kling_video_api(kling_prompt)
+                    if api_err:
+                        st.session_state['kling_status'] = f"⚠️ 可靈 API 提交狀態：{api_err}"
+                    else:
+                        st.session_state['kling_status'] = "✅ 可靈 AI 雲端影片生成任務已成功提交至伺服器排程！"
+
     current_copy = st.session_state.get('copywriting_result', '')
     st.text_area("生成的蝦皮標準文案 (含多規格排版，可點擊右上角一鍵複製)", value=current_copy, height=220)
 
+    # 顯示可靈 API 狀態回饋
+    if 'kling_status' in st.session_state:
+        st.info(st.session_state['kling_status'])
+
     if 'processed_video' in st.session_state and st.session_state['processed_video']:
-        st.write("🎬 **蝦皮 1:1 專用商品動態短影片預覽：**")
+        st.write("🎬 **本地 1:1 專用商品動態短影片預覽：**")
         st.video(st.session_state['processed_video'])
         with open(st.session_state['processed_video'], "rb") as file:
             st.download_button(
