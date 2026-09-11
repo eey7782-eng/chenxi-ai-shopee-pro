@@ -3,6 +3,7 @@ import json
 import time
 import hashlib
 import tempfile
+from datetime import datetime, timedelta
 import requests
 import streamlit as st
 
@@ -21,14 +22,32 @@ USER_DB_FILE = "users.json"
 
 def load_users():
     if not os.path.exists(USER_DB_FILE):
-        default_users = {"admin": hashlib.sha256("admin123".encode()).hexdigest()}
+        # 預設管理員給予較長的有效期限或永久權限
+        default_users = {
+            "admin": {
+                "password": hashlib.sha256("admin123".encode()).hexdigest(),
+                "reg_date": "2026-01-01 00:00:00",
+                "expire_date": "2099-12-31 23:59:59",
+                "is_vip": True
+            }
+        }
         with open(USER_DB_FILE, "w", encoding="utf-8") as f:
             json.dump(default_users, f, ensure_ascii=False, indent=4)
         return default_users
     
     with open(USER_DB_FILE, "r", encoding="utf-8") as f:
         try:
-            return json.load(f)
+            data = json.load(f)
+            # 相容舊版如果資料庫只有簡單密碼字串的情況
+            for k, v in data.items():
+                if isinstance(v, str):
+                    data[k] = {
+                        "password": v,
+                        "reg_date": "2026-01-01 00:00:00",
+                        "expire_date": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                        "is_vip": False
+                    }
+            return data
         except json.JSONDecodeError:
             return {}
 
@@ -47,13 +66,13 @@ if "username" not in st.session_state:
     st.session_state["username"] = ""
 
 # ---------------------------------------------------------------------------
-# 2. 會員系統模組
+# 2. 會員系統模組 (含 3 天試用期)
 # ---------------------------------------------------------------------------
 def login_system():
     st.sidebar.title("👤 會員中心")
 
     if not st.session_state["logged_in"]:
-        menu = ["會員登入", "註冊新會員"]
+        menu = ["會員登入", "註冊新會員 (送3天試用)"]
         choice = st.sidebar.radio("請選擇操作", menu)
 
         if choice == "會員登入":
@@ -61,7 +80,8 @@ def login_system():
             username = st.sidebar.text_input("帳號", key="login_user")
             password = st.sidebar.text_input("密碼", type="password", key="login_pwd")
             if st.sidebar.button("登入", use_container_width=True):
-                if username in users_db and users_db[username] == hash_password(password):
+                user_info = users_db.get(username)
+                if user_info and user_info["password"] == hash_password(password):
                     st.session_state["logged_in"] = True
                     st.session_state["username"] = username
                     st.sidebar.success(f"歡迎回來，{username}！")
@@ -69,8 +89,8 @@ def login_system():
                 else:
                     st.sidebar.error("帳號或密碼錯誤！")
 
-        elif choice == "註冊新會員":
-            st.sidebar.subheader("📝 註冊永久會員")
+        elif choice == "註冊新會員 (送3天試用)":
+            st.sidebar.subheader("📝 註冊享有 3 天試用期")
             new_user = st.sidebar.text_input("設定帳號", key="reg_user")
             new_pwd = st.sidebar.text_input("設定密碼", type="password", key="reg_pwd")
             confirm_pwd = st.sidebar.text_input("確認密碼", type="password", key="reg_pwd_confirm")
@@ -83,25 +103,54 @@ def login_system():
                 elif new_pwd != confirm_pwd:
                     st.sidebar.error("兩次密碼不一致！")
                 else:
-                    users_db[new_user] = hash_password(new_pwd)
+                    reg_date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    expire_date_str = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    users_db[new_user] = {
+                        "password": hash_password(new_pwd),
+                        "reg_date": reg_date_str,
+                        "expire_date": expire_date_str,
+                        "is_vip": False
+                    }
                     save_users(users_db)
-                    st.sidebar.success("🎉 註冊成功！請切換至「會員登入」。")
+                    st.sidebar.success("🎉 註冊成功！系統已贈送 3 天試用期，請切換至「會員登入」。")
 
     else:
-        st.sidebar.success(f"🟢 登入身分：**{st.session_state['username']}**")
+        current_user = st.session_state['username']
+        user_info = users_db.get(current_user, {})
         
+        # 計算試用剩餘時間
+        expire_str = user_info.get("expire_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        expire_dt = datetime.strptime(expire_str, "%Y-%m-%d %H:%M:%S")
+        is_expired = datetime.now() > expire_dt
+        is_vip = user_info.get("is_vip", False)
+
+        st.sidebar.success(f"🟢 登入身分：**{current_user}**")
+        
+        if is_vip:
+            st.sidebar.info("⭐ 身分：**永久 / 正式付費會員**")
+        elif is_expired:
+            st.sidebar.error("⌛ 您的 3 天免費試用期已結束！")
+            st.sidebar.warning("請聯絡管理員升級為正式版以解除功能限制。")
+        else:
+            remaining = expire_dt - datetime.now()
+            days = remaining.days
+            hours = remaining.seconds // 3600
+            minutes = (remaining.seconds % 3600) // 60
+            st.sidebar.warning(f"⏳ 試用倒數：剩餘 **{days}天 {hours}小時 {minutes}分**")
+
+        st.sidebar.markdown("---")
         if st.sidebar.button("🚪 登出系統", use_container_width=True):
             st.session_state["logged_in"] = False
             st.session_state["username"] = ""
             st.rerun()
 
-        st.sidebar.markdown("---")
         with st.sidebar.expander("⚠️ 帳號管理 (刪除帳號)"):
             st.warning("帳號刪除後資料將無法復原。")
             del_pwd = st.text_input("輸入密碼確認刪除", type="password", key="del_pwd")
             if st.button("❌ 確定刪除我的會員帳號", type="primary", use_container_width=True):
-                if hash_password(del_pwd) == users_db.get(st.session_state["username"]):
-                    del users_db[st.session_state["username"]]
+                if hash_password(del_pwd) == user_info.get("password"):
+                    del users_db[current_user]
                     save_users(users_db)
                     st.session_state["logged_in"] = False
                     st.session_state["username"] = ""
@@ -115,8 +164,13 @@ login_system()
 
 if not st.session_state["logged_in"]:
     st.title("🛒 蝦皮 AI 全自動上架與可靈系統")
-    st.info("🔒 本系統僅限會員使用，請先在左側邊欄進行 **「會員登入」** 或 **「註冊新會員」**。")
+    st.info("🔒 本系統僅限會員使用，新註冊即享 **3 天免費試用期**！請先在左側邊欄進行登入或註冊。")
     st.stop()
+
+# 取得目前登入使用者的過期狀態供後續判斷
+current_user_info = users_db.get(st.session_state['username'], {})
+current_expire_dt = datetime.strptime(current_user_info.get("expire_date", "2099-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
+user_is_expired = (datetime.now() > current_expire_dt) and not current_user_info.get("is_vip", False)
 
 # ---------------------------------------------------------------------------
 # 3. 多媒體與 AVIF / WEBP 支援模組
@@ -134,7 +188,7 @@ st.title("🛒 蝦皮 AI 全自動上架與可靈 AI 整合系統 Pro")
 st.caption(f"使用者：【{st.session_state['username']}】｜內建可靈 API 協議，支援帶貨短影片智慧生成。")
 
 # ---------------------------------------------------------------------------
-# 4. 文案與影片生成 Logic (整合規格與可靈 API 呼叫)
+# 4. 文案與影片生成 Logic
 # ---------------------------------------------------------------------------
 def generate_copywriting(name, category, price, features, spec1_name, spec1_options, spec2_name, spec2_options):
     feature_list = "\n".join([f"✨ {f.strip()}" for f in features.split("\n") if f.strip()])
@@ -203,9 +257,6 @@ def generate_local_fallback_video(image_files):
         return None, str(e)
 
 def call_kling_video_api(prompt_text):
-    """
-    透過可靈 API 提交帶貨短影片生成任務
-    """
     headers = {
         "Authorization": f"Bearer {KLING_API_KEY}",
         "Content-Type": "application/json"
@@ -266,16 +317,77 @@ with col1:
     )
 
     use_kling_api = st.checkbox("🚀 同步啟動「可靈 AI API」雲端影片生成引擎", value=True)
-    btn_generate = st.button("🚀 開始 AI 文案與影片生成", type="primary")
+    
+    # 判斷是否過期，過期則停用按鈕並給予提示
+    if user_is_expired:
+        st.error("🔒 您的 3 天免費試用期已結束，AI 生成與影片功能已被鎖定。")
+        btn_generate = st.button("🚀 開始 AI 文案與影片生成 (已鎖定)", type="primary", disabled=True)
+    else:
+        btn_generate = st.button("🚀 開始 AI 文案與影片生成", type="primary")
 
 with col2:
     st.subheader("4. 生成結果與預覽")
     
-    if btn_generate:
+    if btn_generate and not user_is_expired:
         if not p_name:
             st.warning("請填寫商品名稱！")
         else:
             with st.spinner("AI 正在為您生成整合規格的爆款文案與影片中..."):
+                result_text = generate_copywriting(
+                    p_name, p_category, p_price, p_features, 
+                    spec1_name, spec1_options, spec2_name, spec2_options
+                )
+                st.session_state['copywriting_result'] = result_text
+
+                # 本地影片合成
+                if uploaded_images:
+                    out_video_path, err = generate_local_fallback_video(uploaded_images)
+                    if not err and out_video_path:
+                        st.session_state['processed_video'] = out_video_path
+                else:
+                    st.warning("請上傳圖片以自動生成動態短影片！")
+
+                # 可靈 API 雲端生成排程
+                if use_kling_api:
+                    kling_prompt = f"Professional commercial video for {p_name}, high-end presentation, 8k raw texture, vertical 9:16, smooth motion."
+                    api_res, api_err = call_kling_video_api(kling_prompt)
+                    if api_err:
+                        st.session_state['kling_status'] = f"⚠️ 可靈 API 提交狀態：{api_err}"
+                    else:
+                        st.session_state['kling_status'] = "✅ 可靈 AI 雲端影片生成任務已成功提交至伺服器排程！"
+
+    current_copy = st.session_state.get('copywriting_result', '')
+    st.text_area("生成的蝦皮標準文案 (含多規格排版，可點擊右上角一鍵複製)", value=current_copy, height=220)
+
+    # 顯示可靈 API 狀態回饋
+    if 'kling_status' in st.session_state:
+        st.info(st.session_state['kling_status'])
+
+    if 'processed_video' in st.session_state and st.session_state['processed_video']:
+        st.write("🎬 **本地 1:1 專用商品動態短影片預覽：**")
+        st.video(st.session_state['processed_video'])
+        with open(st.session_state['processed_video'], "rb") as file:
+            st.download_button(
+                label="⬇️ 下載此商品 1:1 專用影片",
+                data=file,
+                file_name=f"{p_name}_shopee_video.mp4",
+                mime="video/mp4"
+            )
+
+    st.markdown("---")
+    
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        st.link_button("👉 一鍵開啟蝦皮賣家中心", "https://seller.shopee.tw/portal/product/list/all", use_container_width=True)
+    with btn_col2:
+        if st.button("📦 打包排程上架", use_container_width=True):
+            if user_is_expired:
+                st.error("試用期已過期，無法打包上架！")
+            elif current_copy:
+                st.balloons()
+                st.success("✅ 成功打包！商品文案、規格與影片已排入上架佇列。")
+            else:
+                st.warning("請先生成文案！")."):
                 result_text = generate_copywriting(
                     p_name, p_category, p_price, p_features, 
                     spec1_name, spec1_options, spec2_name, spec2_options
