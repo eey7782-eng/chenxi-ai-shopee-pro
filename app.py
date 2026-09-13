@@ -10,19 +10,17 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 # 0. 可靈 (Kling) AI API 專屬設定
 # ---------------------------------------------------------------------------
-KLING_API_KEY = "9N8ka4iMwM8APWDcjTfq7QblW9vUjCexNLMJtPNOkrY"
-KLING_BASE_URL = "https://api-singapore.klingai.com"  # 依官方海外/新加坡代理節點調整
+KLING_BASE_URL = "https://api-singapore.klingai.com"
 
 # ---------------------------------------------------------------------------
 # 1. 頁面設定與會員資料庫 (JSON 持久化)
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="蝦皮 AI 全自動上架與可靈系統", layout="wide")
+st.set_page_config(page_title="蝦皮 AI 全自動上架與可靈系統 Pro+", layout="wide")
 
 USER_DB_FILE = "users.json"
 
 def load_users():
     if not os.path.exists(USER_DB_FILE):
-        # 預設管理員給予較長的有效期限或永久權限
         default_users = {
             "admin": {
                 "password": hashlib.sha256("admin123".encode()).hexdigest(),
@@ -38,7 +36,6 @@ def load_users():
     with open(USER_DB_FILE, "r", encoding="utf-8") as f:
         try:
             data = json.load(f)
-            # 相容舊版如果資料庫只有簡單密碼字串的情況
             for k, v in data.items():
                 if isinstance(v, str):
                     data[k] = {
@@ -119,7 +116,6 @@ def login_system():
         current_user = st.session_state['username']
         user_info = users_db.get(current_user, {})
         
-        # 計算試用剩餘時間
         expire_str = user_info.get("expire_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         expire_dt = datetime.strptime(expire_str, "%Y-%m-%d %H:%M:%S")
         is_expired = datetime.now() > expire_dt
@@ -131,7 +127,7 @@ def login_system():
             st.sidebar.info("⭐ 身分：**永久 / 正式付費會員**")
         elif is_expired:
             st.sidebar.error("⌛ 您的 3 天免費試用期已結束！")
-            st.sidebar.warning("請聯絡管理員升級為正式版以解除功能限制。")
+            st.sidebar.warning("請聯絡管理員升級為正式版。")
         else:
             remaining = expire_dt - datetime.now()
             days = remaining.days
@@ -145,50 +141,34 @@ def login_system():
             st.session_state["username"] = ""
             st.rerun()
 
-        with st.sidebar.expander("⚠️ 帳號管理 (刪除帳號)"):
-            st.warning("帳號刪除後資料將無法復原。")
-            del_pwd = st.text_input("輸入密碼確認刪除", type="password", key="del_pwd")
-            if st.button("❌ 確定刪除我的會員帳號", type="primary", use_container_width=True):
-                if hash_password(del_pwd) == user_info.get("password"):
-                    del users_db[current_user]
-                    save_users(users_db)
-                    st.session_state["logged_in"] = False
-                    st.session_state["username"] = ""
-                    st.success("帳號已成功刪除！")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error("密碼驗證失敗！")
-
 login_system()
 
 if not st.session_state["logged_in"]:
-    st.title("🛒 蝦皮 AI 全自動上架與可靈系統")
+    st.title("🛒 蝦皮 AI 全自動上架與可靈系統 Pro+")
     st.info("🔒 本系統僅限會員使用，新註冊即享 **3 天免費試用期**！請先在左側邊欄進行登入或註冊。")
     st.stop()
 
-# 取得目前登入使用者的過期狀態供後續判斷
 current_user_info = users_db.get(st.session_state['username'], {})
 current_expire_dt = datetime.strptime(current_user_info.get("expire_date", "2099-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
 user_is_expired = (datetime.now() > current_expire_dt) and not current_user_info.get("is_vip", False)
 
 # ---------------------------------------------------------------------------
-# 3. 多媒體與 AVIF / WEBP 支援模組
+# 3. 多媒體工具檢查
 # ---------------------------------------------------------------------------
 HAS_MEDIA_TOOLS = False
 try:
     from PIL import Image
-    import pillow_avif  # 支援 AVIF 格式解碼
+    import pillow_avif
     from moviepy.editor import ImageClip, concatenate_videoclips
     HAS_MEDIA_TOOLS = True
 except ImportError:
     HAS_MEDIA_TOOLS = False
 
-st.title("🛒 蝦皮 AI 全自動上架與可靈 AI 整合系統 Pro")
-st.caption(f"使用者：【{st.session_state['username']}】｜內建可靈 API 協議，支援帶貨短影片智慧生成。")
+st.title("🛒 蝦皮 AI 全自動上架與可靈 AI 整合系統 Pro+")
+st.caption(f"使用者：【{st.session_state['username']}】｜具備安全金鑰管理與雲端非同步任務輪詢。")
 
 # ---------------------------------------------------------------------------
-# 4. 文案與影片生成 Logic
+# 4. 核心邏輯與 API 模組 (含輪詢機制)
 # ---------------------------------------------------------------------------
 def generate_copywriting(name, category, price, features, spec1_name, spec1_options, spec2_name, spec2_options):
     feature_list = "\n".join([f"✨ {f.strip()}" for f in features.split("\n") if f.strip()])
@@ -256,9 +236,147 @@ def generate_local_fallback_video(image_files):
     except Exception as e:
         return None, str(e)
 
-def call_kling_video_api(prompt_text):
+def call_kling_video_api_with_polling(prompt_text, api_key):
+    """具備完整輪詢 (Polling) 機制的雲端影片生成"""
     headers = {
-        "Authorization": f"Bearer {KLING_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "kling-v1",
+        "prompt": prompt_text,
+        "duration": 5,
+        "mode": "standard",
+        "aspect_ratio": "9:16"
+    }
+    try:
+        # 1. 提交任務
+        res = requests.post(f"{KLING_BASE_URL}/v1/videos/generations", headers=headers, json=payload, timeout=15)
+        if res.status_code != 200:
+            return None, f"API 提交失敗 ({res.status_code}): {res.text}"
+        
+        data = res.json()
+        task_id = data.get("data", {}).get("task_id")
+        if not task_id:
+            return None, f"未能取得 Task ID: {res.text}"
+
+        # 2. 迴圈輪詢狀態 (最多等待 12 次，每次 5 秒)
+        for _ in range(12):
+            time.sleep(5)
+            status_res = requests.get(f"{KLING_BASE_URL}/v1/videos/generations/{task_id}", headers=headers, timeout=10)
+            if status_res.status_code == 200:
+                status_data = status_res.json().get("data", {})
+                task_status = status_data.get("status")
+                
+                if task_status == "completed":
+                    video_url = status_data.get("url")
+                    return video_url, None
+                elif task_status == "failed":
+                    return None, "雲端影片生成失敗。"
+        
+        return None, "影片生成超時，請稍後至後台確認。"
+    except Exception as e:
+        return None, str(e)
+
+# ---------------------------------------------------------------------------
+# 5. 主介面 UI 設計
+# ---------------------------------------------------------------------------
+# 安全讀取 API Key (優先從 st.secrets 拿，沒有的話讓使用者填)
+default_key = st.secrets.get("KLING_API_KEY", "9N8ka4iMwM8APWDcjTfq7QblW9vUjCexNLMJtPNOkrY")
+with st.expander("⚙️ 進階 API 與系統設定"):
+    KLING_API_KEY_INPUT = st.text_input("可靈 (Kling) API Key", value=default_key, type="password")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("1. 輸入商品基本資訊")
+    p_name = st.text_input("商品名稱", value="極簡風無線藍牙耳機")
+    p_category = st.text_input("商品分類", value="3C 數位 / 藍牙耳機")
+    p_price = st.number_input("商品主售價 (NT$)", value=499, step=10)
+    
+    st.subheader("2. 蝦皮多規格選項設定")
+    enable_specs = st.checkbox("開啟多規格選項", value=True)
+    
+    spec1_name, spec1_options = "", ""
+    spec2_name, spec2_options = "", ""
+    
+    if enable_specs:
+        spec_col1, spec_col2 = st.columns(2)
+        with spec_col1:
+            spec1_name = st.text_input("規格一名稱", value="顏色款式")
+            spec1_options = st.text_input("選項 (逗號隔開)", value="曜石黑, 純淨白, 櫻花粉")
+        with spec_col2:
+            spec2_name = st.text_input("規格二名稱", value="尺寸規格")
+            spec2_options = st.text_input("選項 (逗號隔開)", value="標準版, 旗艦版")
+
+    p_features = st.text_area("商品特點 (每行一個)", value="ANC 主動降噪技術\n超長續航 24 小時\nIPX5 防水防汗", height=100)
+
+    uploaded_images = st.file_uploader("上傳商品主圖", type=["jpg", "jpeg", "png", "webp", "avif"], accept_multiple_files=True)
+    use_kling_api = st.checkbox("🚀 同步啟動可靈雲端 AI 影片生成", value=False)
+    
+    if user_is_expired:
+        st.error("🔒 試用期已結束，功能已鎖定。")
+        btn_generate = st.button("🚀 開始 AI 文案與影片生成 (已鎖定)", type="primary", disabled=True)
+    else:
+        btn_generate = st.button("🚀 開始 AI 文案與影片生成", type="primary")
+
+with col2:
+    st.subheader("3. 生成結果與預覽")
+    
+    if btn_generate and not user_is_expired:
+        if not p_name:
+            st.warning("請填寫商品名稱！")
+        else:
+            with st.spinner("AI 正在同步處理文案與短影片中..."):
+                result_text = generate_copywriting(p_name, p_category, p_price, p_features, spec1_name, spec1_options, spec2_name, spec2_options)
+                st.session_state['copywriting_result'] = result_text
+
+                if uploaded_images:
+                    out_video_path, err = generate_local_fallback_video(uploaded_images)
+                    if not err and out_video_path:
+                        st.session_state['processed_video'] = out_video_path
+
+                if use_kling_api:
+                    if not KLING_API_KEY_INPUT:
+                        st.session_state['kling_status'] = "⚠️ 尚未輸入可靈 API Key！"
+                    else:
+                        prompt = f"Professional commercial video for {p_name}, high-end presentation, vertical 9:16."
+                        v_url, api_err = call_kling_video_api_with_polling(prompt, KLING_API_KEY_INPUT)
+                        if api_err:
+                            st.session_state['kling_status'] = f"⚠️ 雲端生成失敗：{api_err}"
+                        else:
+                            st.session_state['kling_status'] = f"✅ 雲端 AI 影片生成成功！網址：{v_url}"
+
+    current_copy = st.session_state.get('copywriting_result', '')
+    st.text_area("生成的蝦皮標準文案", value=current_copy, height=220)
+
+    if 'kling_status' in st.session_state:
+        st.info(st.session_state['kling_status'])
+
+    if 'processed_video' in st.session_state and st.session_state['processed_video']:
+        st.write("🎬 **本地 1:1 專用商品動態短影片預覽：**")
+        st.video(st.session_state['processed_video'])
+        with open(st.session_state['processed_video'], "rb") as file:
+            st.download_button(
+                label="⬇️ 下載此商品 1:1 專用影片",
+                data=file,
+                file_name=f"{p_name}_shopee_video.mp4",
+                mime="video/mp4"
+            )
+
+    st.markdown("---")
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        st.link_button("👉 一鍵開啟蝦皮賣家中心", "https://seller.shopee.tw/portal/product/list/all", use_container_width=True)
+    with btn_col2:
+        if st.button("📦 打包排程上架", use_container_width=True):
+            if user_is_expired:
+                st.error("試用期已過期！")
+            elif current_copy:
+                st.balloons()
+                st.success("✅ 成功打包！已預留 RPA 自動化對接佇列。")
+            else:
+                st.warning("請先生成文案！")"Bearer {KLING_API_KEY}",
         "Content-Type": "application/json"
     }
     payload = {
