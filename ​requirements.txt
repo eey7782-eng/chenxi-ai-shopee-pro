@@ -1,5 +1,6 @@
 streamlit
+openai
 requests
-pillow
-pillow-avif-plugin
+PIL
+pillow-avif
 moviepy
