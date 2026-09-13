@@ -3,157 +3,24 @@ import json
 import time
 import hashlib
 import tempfile
-from datetime import datetime, timedelta
+import base64
+from datetime import datetime
 import requests
 import streamlit as st
+from openai import OpenAI
 
 # ---------------------------------------------------------------------------
-# 0. 可靈 (Kling) AI API 專屬設定
+# 0. API 與系統基礎設定
 # ---------------------------------------------------------------------------
 KLING_BASE_URL = "https://api-singapore.klingai.com"
 
 # ---------------------------------------------------------------------------
-# 1. 頁面設定與會員資料庫 (JSON 持久化)
+# 1. 頁面設定
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="蝦皮 AI 全自動上架與可靈系統 Pro+", layout="wide")
 
-USER_DB_FILE = "users.json"
-
-def load_users():
-    if not os.path.exists(USER_DB_FILE):
-        default_users = {
-            "admin": {
-                "password": hashlib.sha256("admin123".encode()).hexdigest(),
-                "reg_date": "2026-01-01 00:00:00",
-                "expire_date": "2099-12-31 23:59:59",
-                "is_vip": True
-            }
-        }
-        with open(USER_DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(default_users, f, ensure_ascii=False, indent=4)
-        return default_users
-    
-    with open(USER_DB_FILE, "r", encoding="utf-8") as f:
-        try:
-            data = json.load(f)
-            for k, v in data.items():
-                if isinstance(v, str):
-                    data[k] = {
-                        "password": v,
-                        "reg_date": "2026-01-01 00:00:00",
-                        "expire_date": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
-                        "is_vip": False
-                    }
-            return data
-        except json.JSONDecodeError:
-            return {}
-
-def save_users(users):
-    with open(USER_DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(users, f, ensure_ascii=False, indent=4)
-
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-users_db = load_users()
-
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-if "username" not in st.session_state:
-    st.session_state["username"] = ""
-
 # ---------------------------------------------------------------------------
-# 2. 會員系統模組 (含 3 天試用期)
-# ---------------------------------------------------------------------------
-def login_system():
-    st.sidebar.title("👤 會員中心")
-
-    if not st.session_state["logged_in"]:
-        menu = ["會員登入", "註冊新會員 (送3天試用)"]
-        choice = st.sidebar.radio("請選擇操作", menu)
-
-        if choice == "會員登入":
-            st.sidebar.subheader("🔑 帳號登入")
-            username = st.sidebar.text_input("帳號", key="login_user")
-            password = st.sidebar.text_input("密碼", type="password", key="login_pwd")
-            if st.sidebar.button("登入", use_container_width=True):
-                user_info = users_db.get(username)
-                if user_info and user_info["password"] == hash_password(password):
-                    st.session_state["logged_in"] = True
-                    st.session_state["username"] = username
-                    st.sidebar.success(f"歡迎回來，{username}！")
-                    st.rerun()
-                else:
-                    st.sidebar.error("帳號或密碼錯誤！")
-
-        elif choice == "註冊新會員 (送3天試用)":
-            st.sidebar.subheader("📝 註冊享有 3 天試用期")
-            new_user = st.sidebar.text_input("設定帳號", key="reg_user")
-            new_pwd = st.sidebar.text_input("設定密碼", type="password", key="reg_pwd")
-            confirm_pwd = st.sidebar.text_input("確認密碼", type="password", key="reg_pwd_confirm")
-
-            if st.sidebar.button("完成註冊", use_container_width=True):
-                if not new_user or not new_pwd:
-                    st.sidebar.warning("請填寫完整資訊！")
-                elif new_user in users_db:
-                    st.sidebar.error("該帳號已被註冊！")
-                elif new_pwd != confirm_pwd:
-                    st.sidebar.error("兩次密碼不一致！")
-                else:
-                    reg_date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    expire_date_str = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    users_db[new_user] = {
-                        "password": hash_password(new_pwd),
-                        "reg_date": reg_date_str,
-                        "expire_date": expire_date_str,
-                        "is_vip": False
-                    }
-                    save_users(users_db)
-                    st.sidebar.success("🎉 註冊成功！系統已贈送 3 天試用期，請切換至「會員登入」。")
-
-    else:
-        current_user = st.session_state['username']
-        user_info = users_db.get(current_user, {})
-        
-        expire_str = user_info.get("expire_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        expire_dt = datetime.strptime(expire_str, "%Y-%m-%d %H:%M:%S")
-        is_expired = datetime.now() > expire_dt
-        is_vip = user_info.get("is_vip", False)
-
-        st.sidebar.success(f"🟢 登入身分：**{current_user}**")
-        
-        if is_vip:
-            st.sidebar.info("⭐ 身分：**永久 / 正式付費會員**")
-        elif is_expired:
-            st.sidebar.error("⌛ 您的 3 天免費試用期已結束！")
-            st.sidebar.warning("請聯絡管理員升級為正式版。")
-        else:
-            remaining = expire_dt - datetime.now()
-            days = remaining.days
-            hours = remaining.seconds // 3600
-            minutes = (remaining.seconds % 3600) // 60
-            st.sidebar.warning(f"⏳ 試用倒數：剩餘 **{days}天 {hours}小時 {minutes}分**")
-
-        st.sidebar.markdown("---")
-        if st.sidebar.button("🚪 登出系統", use_container_width=True):
-            st.session_state["logged_in"] = False
-            st.session_state["username"] = ""
-            st.rerun()
-
-login_system()
-
-if not st.session_state["logged_in"]:
-    st.title("🛒 蝦皮 AI 全自動上架與可靈系統 Pro+")
-    st.info("🔒 本系統僅限會員使用，新註冊即享 **3 天免費試用期**！請先在左側邊欄進行登入或註冊。")
-    st.stop()
-
-current_user_info = users_db.get(st.session_state['username'], {})
-current_expire_dt = datetime.strptime(current_user_info.get("expire_date", "2099-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
-user_is_expired = (datetime.now() > current_expire_dt) and not current_user_info.get("is_vip", False)
-
-# ---------------------------------------------------------------------------
-# 3. 多媒體工具檢查
+# 2. 多媒體工具檢查
 # ---------------------------------------------------------------------------
 HAS_MEDIA_TOOLS = False
 try:
@@ -164,12 +31,49 @@ try:
 except ImportError:
     HAS_MEDIA_TOOLS = False
 
-st.title("🛒 蝦皮 AI 全自動上架與可靈 AI 整合系統 Pro+")
-st.caption(f"使用者：【{st.session_state['username']}】｜具備安全金鑰管理與雲端非同步任務輪詢。")
+st.title("🛒 蝦皮 AI 全自動上架與視覺辨識系統 Pro+")
+st.caption("具備 OpenAI 視覺辨識、自動文案生成與可靈 AI 影片生成。")
 
 # ---------------------------------------------------------------------------
-# 4. 核心邏輯與 API 模組 (含輪詢機制)
+# 3. 核心邏輯與 API 模組 (含 OpenAI 視覺辨識與可靈輪詢)
 # ---------------------------------------------------------------------------
+def analyze_image_with_openai(image_file, api_key):
+    """使用 OpenAI GPT-4o-mini 分析圖片，回傳商品名稱、分類與特點"""
+    try:
+        client = OpenAI(api_key=api_key)
+        image_bytes = image_file.getvalue()
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "請扮演專業蝦皮電商選品大師，分析這張商品圖片。請嚴格依照下列 JSON 格式（不要包覆 markdown 區塊，直接回傳純 JSON）回傳對應欄位：\n{\n  \"name\": \"吸睛的商品名稱\",\n  \"category\": \"建議的商品分類\",\n  \"features\": \"特點1\\n特點2\\n特點3\"\n}"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=300
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.endswith("```"):
+            content = content[:-3]
+        return json.loads(content.strip()), None
+    except Exception as e:
+        return None, str(e)
+
 def generate_copywriting(name, category, price, features, spec1_name, spec1_options, spec2_name, spec2_options):
     feature_list = "\n".join([f"✨ {f.strip()}" for f in features.split("\n") if f.strip()])
     
@@ -276,21 +180,43 @@ def call_kling_video_api_with_polling(prompt_text, api_key):
         return None, str(e)
 
 # ---------------------------------------------------------------------------
-# 5. 主介面 UI 設計
+# 4. 主介面 UI 設計 (安全讀取 Secrets)
 # ---------------------------------------------------------------------------
-default_key = st.secrets.get("KLING_API_KEY", "9N8ka4iMwM8APWDcjTfq7QblW9vUjCexNLMJtPNOkrY")
+default_kling_key = st.secrets.get("KLING_API_KEY", "")
+default_openai_key = st.secrets.get("OPENAI_API_KEY", "")
+
 with st.expander("⚙️ 進階 API 與系統設定"):
-    KLING_API_KEY_INPUT = st.text_input("可靈 (Kling) API Key", value=default_key, type="password")
+    KLING_API_KEY_INPUT = st.text_input("可靈 (Kling) API Key", value=default_kling_key, type="password")
+    OPENAI_API_KEY_INPUT = st.text_input("OpenAI API Key (用於圖片智慧辨識)", value=default_openai_key, type="password")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("1. 輸入商品基本資訊")
-    p_name = st.text_input("商品名稱", value="極簡風無線藍牙耳機")
-    p_category = st.text_input("商品分類", value="3C 數位 / 藍牙耳機")
+    st.subheader("1. 圖片上傳與 AI 智慧辨識")
+    uploaded_images = st.file_uploader("上傳商品主圖 (支援多張)", type=["jpg", "jpeg", "png", "webp", "avif"], accept_multiple_files=True)
+    
+    if uploaded_images:
+        if st.button("✨ 讓 AI 自動辨識圖片並填入資料", type="secondary"):
+            if not OPENAI_API_KEY_INPUT:
+                st.warning("請先在上方「進階 API 與系統設定」填入 OpenAI API Key！")
+            else:
+                with st.spinner("OpenAI 正在分析您的商品圖片中..."):
+                    ai_result, ai_err = analyze_image_with_openai(uploaded_images[0], OPENAI_API_KEY_INPUT)
+                    if ai_err:
+                        st.error(f"圖片辨識失敗：{ai_err}")
+                    else:
+                        st.session_state['ai_parsed_name'] = ai_result.get("name", "")
+                        st.session_state['ai_parsed_category'] = ai_result.get("category", "")
+                        st.session_state['ai_parsed_features'] = ai_result.get("features", "")
+                        st.success("🎉 AI 辨識成功！欄位已自動填入。")
+                        st.rerun()
+
+    st.subheader("2. 輸入商品基本資訊")
+    p_name = st.text_input("商品名稱", value=st.session_state.get('ai_parsed_name', "極簡風無線藍牙耳機"))
+    p_category = st.text_input("商品分類", value=st.session_state.get('ai_parsed_category', "3C 數位 / 藍牙耳機"))
     p_price = st.number_input("商品主售價 (NT$)", value=499, step=10)
     
-    st.subheader("2. 蝦皮多規格選項設定")
+    st.subheader("3. 蝦皮多規格選項設定")
     enable_specs = st.checkbox("開啟多規格選項", value=True)
     
     spec1_name, spec1_options = "", ""
@@ -305,21 +231,16 @@ with col1:
             spec2_name = st.text_input("規格二名稱", value="尺寸規格")
             spec2_options = st.text_input("選項 (逗號隔開)", value="標準版, 旗艦版")
 
-    p_features = st.text_area("商品特點 (每行一個)", value="ANC 主動降噪技術\n超長續航 24 小時\nIPX5 防水防汗", height=100)
+    p_features = st.text_area("商品特點 (每行一個)", value=st.session_state.get('ai_parsed_features', "ANC 主動降噪技術\n超長續航 24 小時\nIPX5 防水防汗"), height=100)
 
-    uploaded_images = st.file_uploader("上傳商品主圖", type=["jpg", "jpeg", "png", "webp", "avif"], accept_multiple_files=True)
     use_kling_api = st.checkbox("🚀 同步啟動可靈雲端 AI 影片生成", value=False)
     
-    if user_is_expired:
-        st.error("🔒 試用期已結束，功能已鎖定。")
-        btn_generate = st.button("🚀 開始 AI 文案與影片生成 (已鎖定)", type="primary", disabled=True)
-    else:
-        btn_generate = st.button("🚀 開始 AI 文案與影片生成", type="primary")
+    btn_generate = st.button("🚀 開始 AI 文案與影片生成", type="primary")
 
 with col2:
-    st.subheader("3. 生成結果與預覽")
+    st.subheader("4. 生成結果與預覽")
     
-    if btn_generate and not user_is_expired:
+    if btn_generate:
         if not p_name:
             st.warning("請填寫商品名稱！")
         else:
@@ -366,9 +287,7 @@ with col2:
         st.link_button("👉 一鍵開啟蝦皮賣家中心", "https://seller.shopee.tw/portal/product/list/all", use_container_width=True)
     with btn_col2:
         if st.button("📦 打包排程上架", use_container_width=True):
-            if user_is_expired:
-                st.error("試用期已過期！")
-            elif current_copy:
+            if current_copy:
                 st.balloons()
                 st.success("✅ 成功打包！已預留 RPA 自動化對接佇列。")
             else:
