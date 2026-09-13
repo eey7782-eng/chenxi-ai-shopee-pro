@@ -1,6 +1,6 @@
-streamlit
-openai
-requests
-PIL
-pillow-avif
-moviepy
+streamlit==1.32.0
+openai==1.14.1
+requests==2.31.0
+pillow==10.2.0
+pillow-avif-plugin==1.4.3
+moviepy==1.0.3
