@@ -1,5 +1,6 @@
 openai
 requests
 pillow
+pillow-avif-plugin
 moviepy
 streamlit
