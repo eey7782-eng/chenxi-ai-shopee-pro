@@ -1,14 +1,3 @@
-import subprocess
-import sys
-
-# 自動檢查並安裝缺少的套件
-required_packages = ["openai", "requests", "PIL", "pillow_avif", "moviepy"]
-for package in required_packages:
-    try:
-        __import__("PIL" if package == "PIL" else package)
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
 import os
 import json
 import time
