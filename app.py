@@ -5,16 +5,15 @@ import sys
 required_packages = ["openai", "requests", "PIL", "pillow_avif", "moviepy"]
 for package in required_packages:
     try:
-        __import__(package if package != "PIL" else "PIL")
+        __import__("PIL" if package == "PIL" else package)
     except ImportError:
         subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 
 import os
 import json
 import time
-import hashlib
-import tempfile
 import base64
+import tempfile
 from datetime import datetime
 import requests
 import streamlit as st
@@ -28,7 +27,11 @@ KLING_BASE_URL = "https://api-singapore.klingai.com"
 # ---------------------------------------------------------------------------
 # 1. 頁面設定
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="蝦皮 AI 全自動上架與可靈系統 Pro+", layout="wide")
+st.set_page_config(
+    page_title="蝦皮 AI 全自動上架與可靈系統 Pro+", 
+    page_icon="🛒", 
+    layout="wide"
+)
 
 # ---------------------------------------------------------------------------
 # 2. 多媒體工具檢查
@@ -43,12 +46,12 @@ except ImportError:
     HAS_MEDIA_TOOLS = False
 
 st.title("🛒 蝦皮 AI 全自動上架與視覺辨識系統 Pro+")
-st.caption("具備 OpenAI 視覺辨識、自動文案生成與可靈 AI 影片生成。")
+st.caption("結合 OpenAI 智慧視覺辨識、多規格蝦皮爆款文案生成，以及可靈 AI (Kling) 雲端短影片引擎。")
 
 # ---------------------------------------------------------------------------
-# 3. 核心邏輯與 API 模組 (含 OpenAI 視覺辨識與可靈輪詢)
+# 3. 核心邏輯與 API 模組
 # ---------------------------------------------------------------------------
-def analyze_image_with_openai(image_file, api_key):
+def analyze_image_with_openai(image_file, api_key: str):
     """使用 OpenAI GPT-4o-mini 分析圖片，回傳商品名稱、分類與特點"""
     try:
         client = OpenAI(api_key=api_key)
@@ -85,7 +88,7 @@ def analyze_image_with_openai(image_file, api_key):
     except Exception as e:
         return None, str(e)
 
-def generate_copywriting(name, category, price, features, spec1_name, spec1_options, spec2_name, spec2_options):
+def generate_copywriting(name: str, category: str, price: float, features: str, spec1_name: str, spec1_options: str, spec2_name: str, spec2_options: str) -> str:
     feature_list = "\n".join([f"✨ {f.strip()}" for f in features.split("\n") if f.strip()])
     
     spec_text = ""
@@ -121,8 +124,9 @@ def generate_local_fallback_video(image_files):
     if not HAS_MEDIA_TOOLS or not image_files:
         return None, "缺乏圖片或 PIL/MoviePy 庫。"
 
+    clips = []
+    temp_img_paths = []
     try:
-        clips = []
         target_size = (800, 800)
 
         for img_file in image_files:
@@ -135,6 +139,7 @@ def generate_local_fallback_video(image_files):
 
             temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
             img_resized.save(temp_img.name, quality=95)
+            temp_img_paths.append(temp_img.name)
 
             clip = ImageClip(temp_img.name).set_duration(2.5).fadein(0.5).fadeout(0.5)
             clips.append(clip)
@@ -150,8 +155,15 @@ def generate_local_fallback_video(image_files):
         return temp_out_path, None
     except Exception as e:
         return None, str(e)
+    finally:
+        for p in temp_img_paths:
+            if os.path.exists(p):
+                try:
+                    os.unlink(p)
+                except:
+                    pass
 
-def call_kling_video_api_with_polling(prompt_text, api_key):
+def call_kling_video_api_with_polling(prompt_text: str, api_key: str):
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -191,27 +203,27 @@ def call_kling_video_api_with_polling(prompt_text, api_key):
         return None, str(e)
 
 # ---------------------------------------------------------------------------
-# 4. 主介面 UI 設計 (安全讀取 Secrets)
+# 4. 主介面 UI 設計 (支援 st.secrets 自動讀取)
 # ---------------------------------------------------------------------------
-default_kling_key = st.secrets.get("KLING_API_KEY", "")
-default_openai_key = st.secrets.get("OPENAI_API_KEY", "")
+default_kling_key = st.secrets.get("KLING_API_KEY", "") if "KLING_API_KEY" in st.secrets else ""
+default_openai_key = st.secrets.get("OPENAI_API_KEY", "") if "OPENAI_API_KEY" in st.secrets else ""
 
-with st.expander("⚙️ 進階 API 與系統設定"):
-    KLING_API_KEY_INPUT = st.text_input("可靈 (Kling) API Key", value=default_kling_key, type="password")
-    OPENAI_API_KEY_INPUT = st.text_input("OpenAI API Key (用於圖片智慧辨識)", value=default_openai_key, type="password")
+with st.expander("⚙️ 進階 API 與系統安全設定"):
+    KLING_API_KEY_INPUT = st.text_input("可靈 (Kling) API Key", value=default_kling_key, type="password", help="用於雲端 AI 影片生成")
+    OPENAI_API_KEY_INPUT = st.text_input("OpenAI API Key", value=default_openai_key, type="password", help="用於圖片智慧辨識與文案生成")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("1. 圖片上傳與 AI 智慧辨識")
+    st.markdown("### 1. 圖片上傳與 AI 智慧辨識")
     uploaded_images = st.file_uploader("上傳商品主圖 (支援多張)", type=["jpg", "jpeg", "png", "webp", "avif"], accept_multiple_files=True)
     
     if uploaded_images:
-        if st.button("✨ 讓 AI 自動辨識圖片並填入資料", type="secondary"):
+        if st.button("✨ 讓 OpenAI 智慧辨識圖片", type="secondary", use_container_width=True):
             if not OPENAI_API_KEY_INPUT:
-                st.warning("請先在上方「進階 API 與系統設定」填入 OpenAI API Key！")
+                st.warning("請先在上方「進階 API 與系統安全設定」填入 OpenAI API Key！")
             else:
-                with st.spinner("OpenAI 正在分析您的商品圖片中..."):
+                with st.spinner("🤖 OpenAI 正在深度解析您的商品圖片..."):
                     ai_result, ai_err = analyze_image_with_openai(uploaded_images[0], OPENAI_API_KEY_INPUT)
                     if ai_err:
                         st.error(f"圖片辨識失敗：{ai_err}")
@@ -219,16 +231,16 @@ with col1:
                         st.session_state['ai_parsed_name'] = ai_result.get("name", "")
                         st.session_state['ai_parsed_category'] = ai_result.get("category", "")
                         st.session_state['ai_parsed_features'] = ai_result.get("features", "")
-                        st.success("🎉 AI 辨識成功！欄位已自動填入。")
+                        st.success("🎉 AI 辨識成功！相關欄位已自動填入。")
                         st.rerun()
 
-    st.subheader("2. 輸入商品基本資訊")
+    st.markdown("### 2. 商品基本資訊")
     p_name = st.text_input("商品名稱", value=st.session_state.get('ai_parsed_name', "極簡風無線藍牙耳機"))
     p_category = st.text_input("商品分類", value=st.session_state.get('ai_parsed_category', "3C 數位 / 藍牙耳機"))
     p_price = st.number_input("商品主售價 (NT$)", value=499, step=10)
     
-    st.subheader("3. 蝦皮多規格選項設定")
-    enable_specs = st.checkbox("開啟多規格選項", value=True)
+    st.markdown("### 3. 蝦皮多規格選項設定")
+    enable_specs = st.checkbox("啟用多規格選項", value=True)
     
     spec1_name, spec1_options = "", ""
     spec2_name, spec2_options = "", ""
@@ -237,25 +249,25 @@ with col1:
         spec_col1, spec_col2 = st.columns(2)
         with spec_col1:
             spec1_name = st.text_input("規格一名稱", value="顏色款式")
-            spec1_options = st.text_input("選項 (逗號隔開)", value="曜石黑, 純淨白, 櫻花粉")
+            spec1_options = st.text_input("選項 (用逗號隔開)", value="曜石黑, 純淨白, 櫻花粉")
         with spec_col2:
             spec2_name = st.text_input("規格二名稱", value="尺寸規格")
-            spec2_options = st.text_input("選項 (逗號隔開)", value="標準版, 旗艦版")
+            spec2_options = st.text_input("選項 (用逗號隔開)", value="標準版, 旗艦版")
 
-    p_features = st.text_area("商品特點 (每行一個)", value=st.session_state.get('ai_parsed_features', "ANC 主動降噪技術\n超長續航 24 小時\nIPX5 防水防汗"), height=100)
+    p_features = st.text_area("商品核心特點 (每行一項)", value=st.session_state.get('ai_parsed_features', "ANC 主動降噪技術\n超長續航 24 小時\nIPX5 防水防汗"), height=100)
 
-    use_kling_api = st.checkbox("🚀 同步啟動可靈雲端 AI 影片生成", value=False)
+    use_kling_api = st.checkbox("🚀 同步啟動可靈雲端 AI 影片生成 (Kling API)", value=False)
     
-    btn_generate = st.button("🚀 開始 AI 文案與影片生成", type="primary")
+    btn_generate = st.button("🚀 開始全自動 AI 生成", type="primary", use_container_width=True)
 
 with col2:
-    st.subheader("4. 生成結果與預覽")
+    st.markdown("### 4. 生成結果與預覽")
     
     if btn_generate:
         if not p_name:
             st.warning("請填寫商品名稱！")
         else:
-            with st.spinner("AI 正在同步處理文案與短影片中..."):
+            with st.spinner("⚡ AI 正在同步處理專業文案與短影片中，請稍候..."):
                 result_text = generate_copywriting(p_name, p_category, p_price, p_features, spec1_name, spec1_options, spec2_name, spec2_options)
                 st.session_state['copywriting_result'] = result_text
 
@@ -266,31 +278,33 @@ with col2:
 
                 if use_kling_api:
                     if not KLING_API_KEY_INPUT:
-                        st.session_state['kling_status'] = "⚠️ 尚未輸入可靈 API Key！"
+                        st.session_state['kling_status'] = "⚠️ 尚未輸入可靈 (Kling) API Key！"
                     else:
                         prompt = f"Professional commercial video for {p_name}, high-end presentation, vertical 9:16."
                         v_url, api_err = call_kling_video_api_with_polling(prompt, KLING_API_KEY_INPUT)
                         if api_err:
-                            st.session_state['kling_status'] = f"⚠️ 雲端生成失敗：{api_err}"
+                            st.session_state['kling_status'] = f"⚠️ 可靈雲端生成失敗：{api_err}"
                         else:
-                            st.session_state['kling_status'] = f"✅ 雲端 AI 影片生成成功！網址：{v_url}"
+                            st.session_state['kling_status'] = f"✅ 可靈雲端 AI 影片生成成功！直達網址：{v_url}"
 
     current_copy = st.session_state.get('copywriting_result', '')
-    st.text_area("生成的蝦皮標準文案", value=current_copy, height=220)
+    st.text_area("生成的蝦皮標準爆款文案", value=current_copy, height=220)
 
     if 'kling_status' in st.session_state:
         st.info(st.session_state['kling_status'])
 
     if 'processed_video' in st.session_state and st.session_state['processed_video']:
-        st.write("🎬 **本地 1:1 專用商品動態短影片預覽：**")
+        st.markdown("🎬 **本地 1:1 專用商品動態短影片預覽：**")
         st.video(st.session_state['processed_video'])
-        with open(st.session_state['processed_video'], "rb") as file:
-            st.download_button(
-                label="⬇️ 下載此商品 1:1 專用影片",
-                data=file,
-                file_name=f"{p_name}_shopee_video.mp4",
-                mime="video/mp4"
-            )
+        if os.path.exists(st.session_state['processed_video']):
+            with open(st.session_state['processed_video'], "rb") as file:
+                st.download_button(
+                    label="⬇️ 下載此商品專用影片 (MP4)",
+                    data=file,
+                    file_name=f"{p_name}_shopee_video.mp4",
+                    mime="video/mp4",
+                    use_container_width=True
+                )
 
     st.markdown("---")
     btn_col1, btn_col2 = st.columns(2)
@@ -300,6 +314,6 @@ with col2:
         if st.button("📦 打包排程上架", use_container_width=True):
             if current_copy:
                 st.balloons()
-                st.success("✅ 成功打包！已預留 RPA 自動化對接佇列。")
+                st.success("✅ 成功打包！已完成上架前置佇列。")
             else:
                 st.warning("請先生成文案！")
