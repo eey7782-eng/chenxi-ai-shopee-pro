@@ -1,3 +1,14 @@
+import subprocess
+import sys
+
+# 強制自動檢查並安裝雲端需要的核心套件
+required_packages = ["openai", "requests", "pillow", "moviepy", "streamlit"]
+for package in required_packages:
+    try:
+        __import__("PIL" if package == "pillow" else package)
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
 import os
 import json
 import time
