@@ -58,7 +58,6 @@ st.subheader("📦 商品圖片分析與文案生成")
 uploaded_file = st.file_uploader("請上傳商品圖片 (JPG/PNG)", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # 顯示上傳的圖片
     st.image(uploaded_file, caption="已上傳的商品圖片", use_column_width=True)
     
     if st.button("🚀 開始執行 AI 智慧分析與文案生成", type="primary"):
@@ -67,11 +66,9 @@ if uploaded_file is not None:
         else:
             with st.spinner("🤖 OpenAI 正在分析商品並產出文案中..."):
                 try:
-                    # 安全延遲載入 OpenAI，確保不會發生開機找不到模組的問題
                     from openai import OpenAI
                     client = OpenAI(api_key=openai_api_key)
                     
-                    # 將上傳的圖片轉為 base64
                     bytes_data = uploaded_file.getvalue()
                     base64_image = base64.b64encode(bytes_data).decode('utf-8')
                     
@@ -92,7 +89,7 @@ if uploaded_file is not None:
                             }
                         ],
                         max_tokens=1000
-                    ]
+                    )
                     
                     result_text = response.choices[0].message.content
                     st.success("✨ 文案生成成功！")
