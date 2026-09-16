@@ -46,7 +46,8 @@ kling_sk = st.sidebar.text_input(
 
 st.sidebar.markdown("---")
 st.sidebar.info(
-    "💡 提示：請確保 requirements.txt 包含 `streamlit`, `openai`, `requests` 以維持雲端穩定運行。"
+    "💡 提示：請確保 requirements.txt 包含 `streamlit`, `openai`, `requests`"
+    " 以維持雲端穩定運行。"
 )
 
 # ==========================================
@@ -125,6 +126,4 @@ if st.button("🎥 產出短影片"):
         "⚠️ 請先在左側欄位設定可靈 AI 的 AK 與 SK 才能呼叫影片生成功能。"
     )
   else:
-    # 預留串接 Kling AI API 的位置
     st.info("ℹ️ 可靈 AI 任務已送出，正在建立生成請求...")
-    # 範例：未來可在此處加入 requests.post(...) 串接 Kling API 的邏輯
