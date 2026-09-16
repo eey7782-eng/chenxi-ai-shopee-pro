@@ -1,3 +1,14 @@
+import subprocess
+import sys
+
+# 【自動防護】確保雲端環境自動安裝所需套件
+try:
+  import openai
+except ImportError:
+  subprocess.check_call(
+      [sys.executable, "-m", "pip", "install", "openai", "requests"]
+  )
+
 import base64
 from datetime import datetime
 import json
@@ -46,8 +57,7 @@ kling_sk = st.sidebar.text_input(
 
 st.sidebar.markdown("---")
 st.sidebar.info(
-    "💡 提示：請確保 requirements.txt 包含 `streamlit`, `openai`, `requests`"
-    " 以維持雲端穩定運行。"
+    "💡 提示：系統已啟用自動套件載入保護，確保雲端穩定運行。"
 )
 
 # ==========================================
@@ -102,10 +112,6 @@ if uploaded_file is not None:
           st.markdown("### 📝 生成結果：")
           st.markdown(result_text)
 
-        except ImportError:
-          st.error(
-              "❌ 系統尚未安裝 openai 套件，請確認 requirements.txt 內容並重啟。"
-          )
         except Exception as e:
           st.error(f"❌ 發生錯誤：{e}")
 
